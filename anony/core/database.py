@@ -47,6 +47,7 @@ class Database:
         await self.conn.execute("CREATE TABLE IF NOT EXISTS logger (status BOOLEAN)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS sudoers (user_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
+        await self.conn.execute("CREATE TABLE IF NOT EXISTS sessions (name TEXT PRIMARY KEY, string TEXT)")
         await self.conn.commit()
 
     async def close(self) -> None:
@@ -288,6 +289,16 @@ class Database:
                 rows = await cursor.fetchall()
                 self.users.extend([row[0] for row in rows])
         return self.users
+
+    # SESSION METHODS
+    async def get_session(self, name: str) -> str | None:
+        async with self.conn.execute("SELECT string FROM sessions WHERE name = ?", (name,)) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else None
+
+    async def set_session(self, name: str, string: str) -> None:
+        await self.conn.execute("INSERT OR REPLACE INTO sessions (name, string) VALUES (?, ?)", (name, string))
+        await self.conn.commit()
 
     async def load_cache(self) -> None:
         await self.get_chats()

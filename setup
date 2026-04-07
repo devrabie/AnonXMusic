@@ -98,6 +98,7 @@ pprint "\nAnonXMusic Installation Completed.\n" "cgreen"
 sleep 2
 clear
 
+pprint "\nNote: You can skip STRING SESSION and use 'python3 login.py' after setup to login interactively.\n\n" "cyellow"
 pprint "\nEnter Your Values Below\n\n\n" "cmagenta"
 read -rp "API ID: " api_id
 read -rp "API HASH: " api_hash

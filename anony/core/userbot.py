@@ -17,20 +17,27 @@ class Userbot(Client):
         Each client is assigned a unique name based on the key in the `clients` dictionary.
         """
         self.clients = []
-        clients = {"one": "SESSION1", "two": "SESSION2", "three": "SESSION3"}
-        for key, string_key in clients.items():
-            name = f"AnonyUB{key[-1]}"
-            session = getattr(config, string_key)
-            setattr(
-                self,
-                key,
-                Client(
-                    name=name,
-                    api_id=config.API_ID,
-                    api_hash=config.API_HASH,
-                    session_string=session,
-                ),
-            )
+
+    async def _init_client(self, key: str, session: str):
+        """Initializes a single userbot client."""
+        from anony import db
+        if not session:
+            session = await db.get_session(key)
+
+        if not session:
+            return
+
+        name = f"AnonyUB{key[-1]}"
+        setattr(
+            self,
+            key,
+            Client(
+                name=name,
+                api_id=config.API_ID,
+                api_hash=config.API_HASH,
+                session_string=session,
+            ),
+        )
 
     async def boot_client(self, num: int, ub: Client):
         """
@@ -68,21 +75,25 @@ class Userbot(Client):
         """
         Asynchronously starts the assistants.
         """
-        if config.SESSION1:
+        await self._init_client("one", config.SESSION1)
+        await self._init_client("two", config.SESSION2)
+        await self._init_client("three", config.SESSION3)
+
+        if hasattr(self, "one"):
             await self.boot_client(1, self.one)
-        if config.SESSION2:
+        if hasattr(self, "two"):
             await self.boot_client(2, self.two)
-        if config.SESSION3:
+        if hasattr(self, "three"):
             await self.boot_client(3, self.three)
 
     async def exit(self):
         """
         Asynchronously stops the assistants.
         """
-        if config.SESSION1:
+        if hasattr(self, "one"):
             await self.one.stop()
-        if config.SESSION2:
+        if hasattr(self, "two"):
             await self.two.stop()
-        if config.SESSION3:
+        if hasattr(self, "three"):
             await self.three.stop()
         logger.info("Assistants stopped.")
