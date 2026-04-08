@@ -96,3 +96,21 @@ async def _set_url(_, query: types.CallbackQuery):
     m = await app.send_message(query.message.chat.id, query.lang["processing"])
     query.message = m
     await _manage_chat(_, query)
+
+@app.on_callback_query(filters.regex("add_chat_manual"))
+@lang.language()
+async def _add_chat_manual(_, query: types.CallbackQuery):
+    await query.edit_message_text(query.lang["enter_chat_id"])
+
+    response = await app.listen(query.message.chat.id, filters.user(query.from_user.id) & filters.text, timeout=60)
+    if not response:
+        return
+
+    try:
+        chat_id = int(response.text)
+        chat = await app.get_chat(chat_id)
+        await db.add_chat(chat_id, query.from_user.id)
+        await response.reply_text(query.lang["chat_added"].format(chat.title))
+        await _manage_chats_cb(_, query)
+    except Exception:
+        await response.reply_text(query.lang["invalid_chat_id"])

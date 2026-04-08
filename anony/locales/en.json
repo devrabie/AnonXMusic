@@ -177,5 +177,10 @@
     "enter_url": "Please send the live stream URL (Direct MP3/M3U8 link).",
     "url_set": "Stream URL set successfully.",
     "stream_on": "Live stream started.",
-    "stream_off": "Live stream stopped."
+    "stream_off": "Live stream stopped.",
+    "add_chat_manual": "Add Chat Manually",
+    "enter_chat_id": "Please send the Chat ID of the channel or group.",
+    "chat_added": "Successfully added {0}!",
+    "invalid_chat_id": "Invalid Chat ID or chat not found.",
+    "promote_me": "Please promote the bot as an admin in the channel or group with all required permissions."
 }

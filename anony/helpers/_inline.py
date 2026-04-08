@@ -158,6 +158,7 @@ class Inline:
         buttons = []
         for chat_id, title in chats:
             buttons.append([self.ikb(text=title, callback_data=f"manage_chat {chat_id}")])
+        buttons.append([self.ikb(text=_lang["add_chat_manual"], callback_data="add_chat_manual")])
         buttons.append([self.ikb(text=_lang["close"], callback_data="help close")])
         return self.ikm(buttons)
 
@@ -193,10 +194,6 @@ class Inline:
                 )
             ],
             [self.ikb(text=lang["help"], callback_data="help")],
-            [
-                self.ikb(text=lang["support"], url=config.SUPPORT_CHAT),
-                self.ikb(text=lang["channel"], url=config.SUPPORT_CHANNEL),
-            ],
             [
                 self.ikb(text=lang["dashboard"], callback_data="manage_chats"),
             ],

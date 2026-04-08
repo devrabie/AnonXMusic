@@ -60,10 +60,6 @@ class Userbot(Client):
         ub.username = ub.me.username
         ub.mention = ub.me.mention
         self.clients.append(ub)
-        try:
-            await ub.join_chat("fallenx")
-        except Exception:
-            pass
         logger.info(f"Assistant {num} started as @{ub.username}")
 
     async def boot(self):
