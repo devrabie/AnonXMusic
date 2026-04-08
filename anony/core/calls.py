@@ -5,8 +5,7 @@
 
 from ntgcalls import (ConnectionNotFound, TelegramServerError,
                       RTMPStreamingUnsupported, ConnectionError)
-from pyrogram.errors import (ChatSendMediaForbidden, ChatSendPhotosForbidden,
-                             MessageIdInvalid)
+from pyrogram import errors
 from pyrogram.types import InputMediaPhoto, Message
 from pytgcalls import PyTgCalls, exceptions, types
 from pytgcalls.pytgcalls_session import PyTgCallsSession
@@ -114,7 +113,7 @@ class TgCall(PyTgCalls):
                         )
                     else:
                         await message.edit_text(text, reply_markup=keyboard)
-                except (ChatSendMediaForbidden, ChatSendPhotosForbidden, MessageIdInvalid, AttributeError):
+                except (errors.ChatSendMediaForbidden, errors.ChatSendPhotosForbidden, errors.MessageIdInvalid, AttributeError):
                     if _thumb:
                         sent = await app.send_photo(
                             chat_id=chat_id,
