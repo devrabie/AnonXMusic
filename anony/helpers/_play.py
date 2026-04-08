@@ -71,7 +71,7 @@ def checkUB(play):
                         )
             except errors.ChatAdminRequired:
                 return await m.reply_text(m.lang["admin_required"])
-            except (errors.UserNotParticipant, errors.exceptions.bad_request_400.UserNotParticipant):
+            except (errors.UserNotParticipant, errors.exceptions.bad_request_400.UserNotParticipant, errors.PeerIdInvalid):
                 if m.chat.username:
                     invite_link = m.chat.username
                     try:
