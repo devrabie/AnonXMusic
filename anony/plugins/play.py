@@ -22,7 +22,6 @@ def playlist_to_queue(chat_id: int, tracks: list) -> str:
 
 @app.on_message(
     filters.command(["play", "playforce", "vplay", "vplayforce"])
-    & filters.group
     & ~app.bl_users
 )
 @lang.language()
@@ -35,6 +34,27 @@ async def play_hndlr(
     video: bool = False,
     url: str = None,
 ) -> None:
+    if m.chat.type == types.enums.ChatType.PRIVATE:
+        chats = await db.get_chats(user_id=m.from_user.id)
+        if not chats:
+            return await m.reply_text(m.lang["no_chats_to_play"])
+
+        chat_list = []
+        for chat_id in chats:
+            try:
+                chat = await app.get_chat(chat_id)
+                chat_list.append((chat_id, chat.title))
+            except Exception:
+                continue
+
+        if not chat_list:
+            return await m.reply_text(m.lang["no_chats_to_play"])
+
+        return await m.reply_text(
+            text=m.lang["select_chat"],
+            reply_markup=buttons.play_chat_markup(m.lang, chat_list, m.text)
+        )
+
     sent = await m.reply_text(m.lang["play_searching"])
     file = None
     mention = m.from_user.mention

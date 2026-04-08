@@ -152,13 +152,26 @@ async def _add_chat_manual(_, query: types.CallbackQuery):
         return
 
     try:
-        chat_id = response.text
-        if chat_id.startswith("-100"):
-            chat_id = int(chat_id)
-        elif chat_id.isdigit():
-            chat_id = int("-100" + chat_id)
-        else:
-            chat_id = chat_id # Username
+        chat_id = response.text.strip()
+        if "t.me/" in chat_id or "telegram.me/" in chat_id:
+            if "/c/" in chat_id:
+                chat_id = int("-100" + chat_id.split("/")[-2])
+            else:
+                chat_id = chat_id.split("/")[-1]
+
+        if isinstance(chat_id, str) and chat_id.startswith("-100"):
+            try:
+                chat_id = int(chat_id)
+            except ValueError:
+                pass
+        elif isinstance(chat_id, str) and chat_id.replace("-", "").isdigit():
+            chat_id = int(chat_id) if chat_id.startswith("-") else int("-100" + chat_id)
+
+        # Try to resolve peer to avoid PeerIdInvalid
+        try:
+            await app.resolve_peer(chat_id)
+        except Exception:
+            pass
 
         chat = await app.get_chat(chat_id)
         await db.add_chat(chat.id, query.from_user.id)
@@ -209,3 +222,23 @@ async def _add_local(_, query: types.CallbackQuery):
 
     # Refresh dashboard after a delay
     await _manage_chat(_, query)
+
+@app.on_callback_query(filters.regex(r"play_target (-?\d+) (.*)"))
+@lang.language()
+async def _play_target_cb(_, query: types.CallbackQuery):
+    from anony.plugins.play import play_hndlr
+
+    data = query.data.split(maxsplit=2)
+    chat_id = int(data[1])
+    command = data[2]
+
+    # Spoof message to trigger play handler in target chat
+    m = query.message
+    m.chat.id = chat_id
+    m.chat.type = types.enums.ChatType.SUPERGROUP
+    m.text = command
+    m.command = command.split()
+    m.from_user = query.from_user
+
+    await query.message.delete()
+    await play_hndlr(_, m)

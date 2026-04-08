@@ -41,7 +41,7 @@ class Database:
 
     async def _create_tables(self):
         await self.conn.execute("CREATE TABLE IF NOT EXISTS auth (chat_id INTEGER, user_id INTEGER, PRIMARY KEY(chat_id, user_id))")
-        await self.conn.execute("CREATE TABLE IF NOT EXISTS assistant (chat_id INTEGER PRIMARY KEY, num INTEGER)")
+        await self.conn.execute("CREATE TABLE IF NOT EXISTS assistant (chat_id INTEGER PRIMARY KEY, user_id INTEGER)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS blacklist_chats (chat_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS blacklist_users (user_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER PRIMARY KEY, cmd_delete BOOLEAN DEFAULT 0, admin_play BOOLEAN DEFAULT 0, stream_url TEXT, stream_status BOOLEAN DEFAULT 0, added_by INTEGER)")
@@ -54,6 +54,10 @@ class Database:
         await self.conn.commit()
 
     async def _migrate_tables(self):
+        try:
+            await self.conn.execute("ALTER TABLE assistant ADD COLUMN user_id INTEGER")
+        except Exception:
+            pass
         try:
             await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_url TEXT")
         except Exception:
@@ -136,41 +140,47 @@ class Database:
     async def set_assistant(self, chat_id: int) -> int:
         from anony import userbot
         if not userbot.clients:
-            return 1
-        num = randint(1, len(userbot.clients))
-        await self.conn.execute("INSERT OR REPLACE INTO assistant (chat_id, num) VALUES (?, ?)", (chat_id, num))
+            return None
+        client = userbot.clients[randint(0, len(userbot.clients) - 1)]
+        user_id = client.me.id
+        await self.conn.execute("INSERT OR REPLACE INTO assistant (chat_id, user_id) VALUES (?, ?)", (chat_id, user_id))
         await self.conn.commit()
-        self.assistant[chat_id] = num
-        return num
+        self.assistant[chat_id] = user_id
+        return user_id
 
     async def get_assistant(self, chat_id: int):
         from anony import anon
         if chat_id not in self.assistant:
-            async with self.conn.execute("SELECT num FROM assistant WHERE chat_id = ?", (chat_id,)) as cursor:
+            async with self.conn.execute("SELECT user_id FROM assistant WHERE chat_id = ?", (chat_id,)) as cursor:
                 row = await cursor.fetchone()
-                num = row[0] if row else await self.set_assistant(chat_id)
-                self.assistant[chat_id] = num
+                user_id = row[0] if row else await self.set_assistant(chat_id)
+                self.assistant[chat_id] = user_id
 
         if not anon.clients:
-            logger.warning(f"No streaming clients (anon.clients) available for chat {chat_id}.")
             return None
 
-        try:
-            return anon.clients[self.assistant[chat_id] - 1]
-        except IndexError:
-            logger.warning(f"Assistant index {self.assistant[chat_id]-1} out of range for anon.clients.")
-            return None
+        for client in anon.clients:
+            ub = getattr(client, "app", getattr(client, "_app", None))
+            if ub and ub.me.id == self.assistant[chat_id]:
+                return client
+
+        # Fallback to first assistant if mapped one is missing
+        return anon.clients[0]
 
     async def get_client(self, chat_id: int):
         from anony import userbot
         if chat_id not in self.assistant:
             await self.get_assistant(chat_id)
 
-        num = self.assistant.get(chat_id)
-        if not num or num > len(userbot.clients):
+        user_id = self.assistant.get(chat_id)
+        if not user_id:
             return None
 
-        return userbot.clients[num - 1]
+        for client in userbot.clients:
+            if client.me.id == user_id:
+                return client
+
+        return userbot.clients[0] if userbot.clients else None
 
     # BLACKLIST METHODS
     async def add_blacklist(self, chat_id: int) -> None:

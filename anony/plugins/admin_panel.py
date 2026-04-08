@@ -92,7 +92,8 @@ async def _del_ass(_, query: types.CallbackQuery):
 
     # Remove from calling clients
     for call_client in anon.clients:
-        if call_client.app.me.id == user_id:
+        ub = getattr(call_client, "app", getattr(call_client, "_app", None))
+        if ub and ub.me.id == user_id:
             try:
                 await call_client.stop()
             except:

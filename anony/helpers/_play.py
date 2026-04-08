@@ -17,7 +17,7 @@ def checkUB(play):
             return await m.reply_text(m.lang["play_user_invalid"])
 
         chat_id = m.chat.id
-        if m.chat.type != enums.ChatType.SUPERGROUP:
+        if m.chat.type != enums.ChatType.SUPERGROUP and m.chat.type != enums.ChatType.PRIVATE:
             await m.reply_text(m.lang["play_chat_invalid"])
             return await app.leave_chat(chat_id)
 

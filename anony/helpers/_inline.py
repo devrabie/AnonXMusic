@@ -151,10 +151,15 @@ class Inline:
         )
 
     def assistants_markup(self, _lang: dict, assistants: list) -> types.InlineKeyboardMarkup:
-        buttons = [
-            [self.ikb(text=f"🗑️ @{u.username}" if u.username else u.first_name, callback_data=f"del_ass {u.id}")]
-            for u in assistants
-        ]
+        buttons = []
+        for u in assistants:
+            # Handle both Pyrogram Client and User objects
+            username = getattr(u, "username", None) or getattr(getattr(u, "me", None), "username", None)
+            first_name = getattr(u, "first_name", None) or getattr(getattr(u, "me", None), "first_name", "Assistant")
+            user_id = getattr(u, "id", None) or getattr(getattr(u, "me", None), "id", 0)
+
+            buttons.append([self.ikb(text=f"🗑️ @{username}" if username else first_name, callback_data=f"del_ass {user_id}")])
+
         buttons.append([self.ikb(text=_lang["add_assistant"], callback_data="add_ass")])
         buttons.append([self.ikb(text=_lang["back"], callback_data="admin_panel")])
         return self.ikm(buttons)
@@ -174,6 +179,14 @@ class Inline:
 
     def cancel_markup(self, _lang: dict) -> types.InlineKeyboardMarkup:
         return self.ikm([[self.ikb(text=_lang["cancel"], callback_data="start_back")]])
+
+    def play_chat_markup(self, _lang: dict, chats: list, command: str) -> types.InlineKeyboardMarkup:
+        buttons = []
+        for chat_id, title in chats:
+            buttons.append([self.ikb(text=title, callback_data=f"play_target {chat_id} {command}")])
+
+        buttons.append([self.ikb(text=_lang["back"], callback_data="start_back")])
+        return self.ikm(buttons)
 
     def stream_markup(self, _lang: dict, chat_id: int, status: bool, stype: str = "audio", source: str = "url") -> types.InlineKeyboardMarkup:
         return self.ikm(

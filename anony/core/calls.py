@@ -58,6 +58,12 @@ class TgCall(PyTgCalls):
 
         assistant_id = ub.me.id
 
+        # Resolve peer to avoid PeerIdInvalid
+        try:
+            await ub.resolve_peer(chat_id)
+        except Exception:
+            pass
+
         # Ensure assistant is in chat and promoted
         try:
             member = await app.get_chat_member(chat_id, assistant_id)

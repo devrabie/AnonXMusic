@@ -49,7 +49,8 @@ class Userbot(Client):
         Raises:
             SystemExit: If the client fails to send a message in the log group.
         """
-        await ub.start()
+        if not getattr(ub, "is_connected", False):
+            await ub.start()
         try:
             await ub.send_message(config.LOGGER_ID, "Assistant Started")
         except Exception:

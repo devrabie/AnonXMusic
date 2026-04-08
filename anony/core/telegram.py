@@ -137,13 +137,15 @@ class Telegram:
     async def get_from_link(self, link: str, sent: types.Message) -> Media | None:
         try:
             if "t.me/c/" in link:
-                chat = int("-100" + link.split("/")[-2])
-                msg_id = int(link.split("/")[-1])
+                parts = link.split("/")
+                chat = int("-100" + parts[-2])
+                msg_id = int(parts[-1])
             else:
-                chat = link.split("/")[-2]
+                parts = link.split("/")
+                chat = parts[-2]
                 if chat.isdigit():
                     chat = int("-100" + chat)
-                msg_id = int(link.split("/")[-1])
+                msg_id = int(parts[-1])
         except (IndexError, ValueError):
             return None
 
@@ -159,6 +161,12 @@ class Telegram:
             from anony import userbot
             for client in userbot.clients:
                 try:
+                    # Resolve peer before getting messages to avoid PeerIdInvalid/USERNAME_INVALID
+                    if isinstance(chat, str):
+                        try:
+                            await client.resolve_peer(chat)
+                        except Exception:
+                            continue
                     msg = await client.get_messages(chat, msg_id)
                     if msg and not msg.empty:
                         break
