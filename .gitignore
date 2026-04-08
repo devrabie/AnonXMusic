@@ -10,3 +10,6 @@ __pycache__/
 anony/cookies/*.txt
 *.session
 *.session-journal
+*.db
+*.db-journal
+anony.db
