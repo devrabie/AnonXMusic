@@ -70,7 +70,7 @@ async def _toggle_stream(_, query: types.CallbackQuery):
     await db.set_stream(chat_id, status=new_status)
 
     if new_status:
-        await anon.play_media(chat_id, query.message, stream_url=url)
+        await anon.play_media(chat_id, None, stream_url=url)
         await query.answer(query.lang["stream_on"])
     else:
         await anon.stop(chat_id)
@@ -82,10 +82,8 @@ async def _toggle_stream(_, query: types.CallbackQuery):
 @lang.language()
 async def _set_url(_, query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
-    await query.edit_message_text(query.lang["enter_url"])
-
-    response = await app.listen(query.message.chat.id, filters.text, timeout=60)
-    if not response:
+    response = await app.ask(query.message.chat.id, query.lang["enter_url"], timeout=60)
+    if not response or not response.text:
         return
 
     url = response.text
@@ -100,10 +98,8 @@ async def _set_url(_, query: types.CallbackQuery):
 @app.on_callback_query(filters.regex("add_chat_manual"))
 @lang.language()
 async def _add_chat_manual(_, query: types.CallbackQuery):
-    await query.edit_message_text(query.lang["enter_chat_id"])
-
-    response = await app.listen(query.message.chat.id, filters.text, timeout=60)
-    if not response:
+    response = await app.ask(query.message.chat.id, query.lang["enter_chat_id"], timeout=60)
+    if not response or not response.text:
         return
 
     try:
@@ -119,10 +115,8 @@ async def _add_chat_manual(_, query: types.CallbackQuery):
 @lang.language()
 async def _add_local(_, query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
-    await query.edit_message_text(query.lang["enter_telegram_link"])
-
-    response = await app.listen(query.message.chat.id, filters.text, timeout=60)
-    if not response:
+    response = await app.ask(query.message.chat.id, query.lang["enter_telegram_link"], timeout=60)
+    if not response or not response.text:
         return
 
     link = response.text

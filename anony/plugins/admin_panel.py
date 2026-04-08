@@ -33,10 +33,8 @@ async def _manage_ass(_, query: types.CallbackQuery):
 @app.on_callback_query(filters.regex("add_ass") & filters.user(app.owner))
 @lang.language()
 async def _add_ass(_, query: types.CallbackQuery):
-    await query.edit_message_text(query.lang["enter_session"])
-
-    response = await app.listen(query.message.chat.id, filters.text, timeout=60)
-    if not response:
+    response = await app.ask(query.message.chat.id, query.lang["enter_session"], timeout=60)
+    if not response or not response.text:
         return
 
     session = response.text
