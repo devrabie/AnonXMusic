@@ -170,6 +170,7 @@
     "stream_url": "🔗 رابط البث",
     "stream_status": "📊 حالة البث",
     "stream_type": "🎞️ نوع البث",
+    "stream_source": "📂 مصدر البث",
     "start_stream": "▶️ تشغيل البث",
     "stop_stream": "⏹️ إيقاف البث",
     "set_url": "🔗 تعيين الرابط",

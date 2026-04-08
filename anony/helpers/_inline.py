@@ -152,7 +152,7 @@ class Inline:
 
     def assistants_markup(self, _lang: dict, assistants: list) -> types.InlineKeyboardMarkup:
         buttons = [
-            [self.ikb(text=f"🗑️ @{u.username}" if u.username else u.name, callback_data=f"del_ass {u.id}")]
+            [self.ikb(text=f"🗑️ @{u.username}" if u.username else u.first_name, callback_data=f"del_ass {u.id}")]
             for u in assistants
         ]
         buttons.append([self.ikb(text=_lang["add_assistant"], callback_data="add_ass")])
@@ -175,12 +175,15 @@ class Inline:
     def cancel_markup(self, _lang: dict) -> types.InlineKeyboardMarkup:
         return self.ikm([[self.ikb(text=_lang["cancel"], callback_data="start_back")]])
 
-    def stream_markup(self, _lang: dict, chat_id: int, status: bool, stype: str = "audio") -> types.InlineKeyboardMarkup:
+    def stream_markup(self, _lang: dict, chat_id: int, status: bool, stype: str = "audio", source: str = "url") -> types.InlineKeyboardMarkup:
         return self.ikm(
             [
                 [
                     self.ikb(text=_lang["stream_status"] + (": ON" if status else ": OFF"), callback_data="none"),
+                ],
+                [
                     self.ikb(text=_lang["stream_type"] + (": 🎧" if stype == "audio" else ": 📺"), callback_data=f"toggle_stype {chat_id}"),
+                    self.ikb(text=_lang["stream_source"] + (": 🔗" if source == "url" else ": 📑"), callback_data=f"toggle_source {chat_id}"),
                 ],
                 [
                     self.ikb(

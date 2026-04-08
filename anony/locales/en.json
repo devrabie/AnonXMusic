@@ -170,6 +170,7 @@
     "stream_url": "🔗 Stream URL",
     "stream_status": "📊 Stream Status",
     "stream_type": "🎞️ Stream Type",
+    "stream_source": "📂 Stream Source",
     "start_stream": "▶️ Start Stream",
     "stop_stream": "⏹️ Stop Stream",
     "set_url": "🔗 Set URL",

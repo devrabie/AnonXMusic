@@ -56,7 +56,7 @@ async def _manage_chats_cb(_, query: types.CallbackQuery):
 @lang.language()
 async def _manage_chat(_, query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
-    url, status, stype = await db.get_stream(chat_id)
+    url, status, stype, source = await db.get_stream(chat_id)
 
     # Check if currently playing
     is_playing = await db.get_call(chat_id)
@@ -64,7 +64,7 @@ async def _manage_chat(_, query: types.CallbackQuery):
     if is_playing:
         keyboard = buttons.controls(chat_id)
     else:
-        keyboard = buttons.stream_markup(query.lang, chat_id, status, stype)
+        keyboard = buttons.stream_markup(query.lang, chat_id, status, stype, source)
 
     await query.edit_message_text(
         text=query.lang["stream_settings"].format(chat_id),
@@ -75,17 +75,27 @@ async def _manage_chat(_, query: types.CallbackQuery):
 @lang.language()
 async def _toggle_stype(_, query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
-    url, status, stype = await db.get_stream(chat_id)
+    url, status, stype, source = await db.get_stream(chat_id)
 
     new_type = "video" if stype == "audio" else "audio"
     await db.set_stream(chat_id, stype=new_type)
+    await _manage_chat(_, query)
+
+@app.on_callback_query(filters.regex(r"toggle_source (-?\d+)"))
+@lang.language()
+async def _toggle_source(_, query: types.CallbackQuery):
+    chat_id = int(query.data.split()[1])
+    url, status, stype, source = await db.get_stream(chat_id)
+
+    new_source = "playlist" if source == "url" else "url"
+    await db.set_stream(chat_id, source=new_source)
     await _manage_chat(_, query)
 
 @app.on_callback_query(filters.regex(r"toggle_stream (-?\d+)"))
 @lang.language()
 async def _toggle_stream(_, query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
-    url, status, stype = await db.get_stream(chat_id)
+    url, status, stype, source = await db.get_stream(chat_id)
 
     if not url:
         return await query.answer(query.lang["enter_url"], show_alert=True)
@@ -94,7 +104,12 @@ async def _toggle_stream(_, query: types.CallbackQuery):
     await db.set_stream(chat_id, status=new_status)
 
     if new_status:
-        await anon.play_media(chat_id, None, stream_url=url, video=(stype == "video"))
+        if source == "url":
+            if not url:
+                return await query.answer(query.lang["enter_url"], show_alert=True)
+            await anon.play_media(chat_id, None, stream_url=url, video=(stype == "video"))
+        else:
+            await anon.play_next(chat_id)
         await query.answer(query.lang["stream_on"])
     else:
         await anon.stop(chat_id)

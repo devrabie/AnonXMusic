@@ -147,10 +147,25 @@ class Telegram:
         except (IndexError, ValueError):
             return None
 
+        msg = None
+        # Try main bot first
         try:
             msg = await app.get_messages(chat, msg_id)
-            if not self.get_media(msg):
-                return None
-            return await self.download(msg, sent)
         except Exception:
+            pass
+
+        # Try assistants if main bot failed
+        if not msg or msg.empty:
+            from anony import userbot
+            for client in userbot.clients:
+                try:
+                    msg = await client.get_messages(chat, msg_id)
+                    if msg and not msg.empty:
+                        break
+                except Exception:
+                    continue
+
+        if not msg or msg.empty or not self.get_media(msg):
             return None
+
+        return await self.download(msg, sent)
