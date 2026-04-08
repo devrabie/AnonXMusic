@@ -55,7 +55,11 @@ class Database:
 
     async def _migrate_tables(self):
         try:
-            await self.conn.execute("ALTER TABLE assistant ADD COLUMN user_id INTEGER")
+            async with self.conn.execute("PRAGMA table_info(assistant)") as cursor:
+                columns = [row[1] for row in await cursor.fetchall()]
+                if "num" in columns:
+                    await self.conn.execute("DROP TABLE assistant")
+                    await self.conn.execute("CREATE TABLE assistant (chat_id INTEGER PRIMARY KEY, user_id INTEGER)")
         except Exception:
             pass
         try:
@@ -142,7 +146,7 @@ class Database:
         if not userbot.clients:
             return None
         client = userbot.clients[randint(0, len(userbot.clients) - 1)]
-        user_id = client.me.id
+        user_id = client.id
         await self.conn.execute("INSERT OR REPLACE INTO assistant (chat_id, user_id) VALUES (?, ?)", (chat_id, user_id))
         await self.conn.commit()
         self.assistant[chat_id] = user_id
@@ -161,7 +165,7 @@ class Database:
 
         for client in anon.clients:
             ub = getattr(client, "app", getattr(client, "_app", None))
-            if ub and ub.me.id == self.assistant[chat_id]:
+            if ub and ub.id == self.assistant[chat_id]:
                 return client
 
         # Fallback to first assistant if mapped one is missing
@@ -174,10 +178,11 @@ class Database:
 
         user_id = self.assistant.get(chat_id)
         if not user_id:
-            return None
+            return userbot.clients[0] if userbot.clients else None
 
         for client in userbot.clients:
-            if client.me.id == user_id:
+            client_id = getattr(client, "id", None)
+            if client_id == user_id:
                 return client
 
         return userbot.clients[0] if userbot.clients else None

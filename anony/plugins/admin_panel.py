@@ -54,8 +54,8 @@ async def _add_ass(_, query: types.CallbackQuery):
 
     try:
         await new_client.start()
-        me = await new_client.get_me()
-        await db.set_session(f"assistant_{me.id}", session)
+        new_client.id = new_client.me.id
+        await db.set_session(f"assistant_{new_client.id}", session)
         await userbot.boot_client(len(userbot.clients) + 1, new_client)
 
         # Initialize calling client for the new assistant
@@ -82,7 +82,7 @@ async def _del_ass(_, query: types.CallbackQuery):
 
     # Remove from active clients
     for client in userbot.clients:
-        if client.me.id == user_id:
+        if client.id == user_id:
             try:
                 await client.stop()
             except:
@@ -92,8 +92,7 @@ async def _del_ass(_, query: types.CallbackQuery):
 
     # Remove from calling clients
     for call_client in anon.clients:
-        ub = getattr(call_client, "app", getattr(call_client, "_app", None))
-        if ub and ub.me.id == user_id:
+        if call_client.id == user_id:
             try:
                 await call_client.stop()
             except:

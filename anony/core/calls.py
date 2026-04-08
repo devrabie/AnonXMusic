@@ -56,7 +56,15 @@ class TgCall(PyTgCalls):
             logger.error(f"No MTProto client found for assistant in chat {chat_id}")
             return
 
-        assistant_id = ub.me.id
+        assistant_id = getattr(ub, "id", None)
+        if not assistant_id:
+            try:
+                me = getattr(ub, "me", None) or await ub.get_me()
+                assistant_id = me.id
+                ub.id = assistant_id
+            except Exception as e:
+                logger.error(f"Could not retrieve assistant ID: {e}")
+                return
 
         # Resolve peer to avoid PeerIdInvalid
         try:
@@ -263,6 +271,10 @@ class TgCall(PyTgCalls):
 
 
     async def decorators(self, client: PyTgCalls) -> None:
+        ub = getattr(client, "app", getattr(client, "_app", None))
+        if ub:
+            client.id = ub.id
+
         @client.on_update()
         async def update_handler(_, update: types.Update) -> None:
             if isinstance(update, types.StreamEnded):

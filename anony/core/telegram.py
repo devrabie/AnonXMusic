@@ -136,15 +136,16 @@ class Telegram:
 
     async def get_from_link(self, link: str, sent: types.Message) -> Media | None:
         try:
+            link = link.strip()
             if "t.me/c/" in link:
                 parts = link.split("/")
                 chat = int("-100" + parts[-2])
                 msg_id = int(parts[-1])
             else:
-                parts = link.split("/")
+                parts = [p for p in link.split("/") if p]
                 chat = parts[-2]
-                if chat.isdigit():
-                    chat = int("-100" + chat)
+                if chat.replace("-", "").isdigit():
+                    chat = int(chat) if chat.startswith("-") else int("-100" + chat)
                 msg_id = int(parts[-1])
         except (IndexError, ValueError):
             return None
@@ -162,10 +163,10 @@ class Telegram:
             for client in userbot.clients:
                 try:
                     # Resolve peer before getting messages to avoid PeerIdInvalid/USERNAME_INVALID
-                    if isinstance(chat, str):
-                        try:
-                            await client.resolve_peer(chat)
-                        except Exception:
+                    try:
+                        await client.resolve_peer(chat)
+                    except Exception:
+                        if isinstance(chat, str):
                             continue
                     msg = await client.get_messages(chat, msg_id)
                     if msg and not msg.empty:

@@ -39,6 +39,10 @@ class Bot(pyrogram.Client):
         self.mention = self.me.mention
 
         try:
+            try:
+                await self.resolve_peer(self.logger)
+            except Exception:
+                pass
             await self.send_message(self.logger, "Bot Started")
             get = await self.get_chat_member(self.logger, self.id)
             if get.status != pyrogram.enums.ChatMemberStatus.ADMINISTRATOR:

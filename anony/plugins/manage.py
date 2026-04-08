@@ -157,7 +157,7 @@ async def _add_chat_manual(_, query: types.CallbackQuery):
             if "/c/" in chat_id:
                 chat_id = int("-100" + chat_id.split("/")[-2])
             else:
-                chat_id = chat_id.split("/")[-1]
+                chat_id = [p for p in chat_id.split("/") if p][-1]
 
         if isinstance(chat_id, str) and chat_id.startswith("-100"):
             try:
@@ -227,18 +227,24 @@ async def _add_local(_, query: types.CallbackQuery):
 @lang.language()
 async def _play_target_cb(_, query: types.CallbackQuery):
     from anony.plugins.play import play_hndlr
+    from types import SimpleNamespace
+    import asyncio
 
     data = query.data.split(maxsplit=2)
     chat_id = int(data[1])
     command = data[2]
 
     # Spoof message to trigger play handler in target chat
-    m = query.message
-    m.chat.id = chat_id
-    m.chat.type = types.enums.ChatType.SUPERGROUP
-    m.text = command
-    m.command = command.split()
-    m.from_user = query.from_user
+    m = SimpleNamespace(
+        chat=SimpleNamespace(id=chat_id, type=types.enums.ChatType.SUPERGROUP),
+        text=command,
+        command=command.split(),
+        from_user=query.from_user,
+        reply_to_message=None,
+        reply_text=lambda *args, **kwargs: app.send_message(chat_id, *args, **kwargs),
+        delete=lambda *args, **kwargs: asyncio.sleep(0),
+        lang=query.lang
+    )
 
     await query.message.delete()
     await play_hndlr(_, m)

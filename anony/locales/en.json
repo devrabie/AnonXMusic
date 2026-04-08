@@ -190,5 +190,7 @@
     "promote_me": "👮 Please promote the bot as an admin in the channel or group with all required permissions for broadcasting to work correctly.",
     "add_local_media": "📁 Add Telegram Media",
     "enter_telegram_link": "🔗 Please send a public Telegram link (e.g., https://t.me/Video_ra/132990)",
-    "invalid_telegram_link": "❌ Invalid Telegram link or no supported media found."
+    "invalid_telegram_link": "❌ Invalid Telegram link or unsupported media.",
+    "select_chat": "🎯 Please select the channel or group you want to play in:",
+    "no_chats_to_play": "📩 You haven't added any channels or groups yet. Add them from the dashboard first."
 }
