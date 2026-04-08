@@ -88,7 +88,12 @@ async def _toggle_stream(_, query: types.CallbackQuery):
 @lang.language()
 async def _set_url(_, query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
-    response = await app.ask(query.message.chat.id, query.lang["enter_url"], timeout=60)
+    response = await app.ask(
+        query.message.chat.id,
+        query.lang["enter_url"],
+        reply_markup=buttons.cancel_markup(query.lang),
+        timeout=60
+    )
     if not response or not response.text:
         return
 
@@ -104,24 +109,41 @@ async def _set_url(_, query: types.CallbackQuery):
 @app.on_callback_query(filters.regex("add_chat_manual"))
 @lang.language()
 async def _add_chat_manual(_, query: types.CallbackQuery):
-    response = await app.ask(query.message.chat.id, query.lang["enter_chat_id"], timeout=60)
+    response = await app.ask(
+        query.message.chat.id,
+        query.lang["enter_chat_id"],
+        reply_markup=buttons.cancel_markup(query.lang),
+        timeout=60
+    )
     if not response or not response.text:
         return
 
     try:
-        chat_id = int(response.text)
+        chat_id = response.text
+        if chat_id.startswith("-100"):
+            chat_id = int(chat_id)
+        elif chat_id.isdigit():
+            chat_id = int("-100" + chat_id)
+        else:
+            chat_id = chat_id # Username
+
         chat = await app.get_chat(chat_id)
-        await db.add_chat(chat_id, query.from_user.id)
+        await db.add_chat(chat.id, query.from_user.id)
         await response.reply_text(query.lang["chat_added"].format(chat.title))
         await _manage_chats_cb(_, query)
-    except Exception:
-        await response.reply_text(query.lang["invalid_chat_id"])
+    except Exception as e:
+        await response.reply_text(f"{query.lang['invalid_chat_id']}\n\nError: {e}")
 
 @app.on_callback_query(filters.regex(r"add_local (-?\d+)"))
 @lang.language()
 async def _add_local(_, query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
-    response = await app.ask(query.message.chat.id, query.lang["enter_telegram_link"], timeout=60)
+    response = await app.ask(
+        query.message.chat.id,
+        query.lang["enter_telegram_link"],
+        reply_markup=buttons.cancel_markup(query.lang),
+        timeout=60
+    )
     if not response or not response.text:
         return
 

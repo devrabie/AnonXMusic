@@ -35,7 +35,7 @@ async def start(_, message: types.Message):
         else message.lang["start_gp"].format(app.name)
     )
 
-    key = buttons.start_key(message.lang, private)
+    key = buttons.start_key(message.lang, private, message.from_user.id)
     await message.reply_text(
         text=_text,
         reply_markup=key,

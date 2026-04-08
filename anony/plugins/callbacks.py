@@ -160,7 +160,7 @@ async def _start_back(_, query: types.CallbackQuery):
     )
     await query.edit_message_text(
         text=_text,
-        reply_markup=buttons.start_key(query.lang, private)
+        reply_markup=buttons.start_key(query.lang, private, query.from_user.id)
     )
 
 @app.on_callback_query(filters.regex("settings") & ~app.bl_users)
