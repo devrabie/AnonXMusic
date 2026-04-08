@@ -5,7 +5,7 @@
 
 from pathlib import Path
 
-from pyrogram import filters, types
+from pyrogram import enums, filters, types
 
 from anony import anon, app, config, db, lang, queue, tg, yt
 from anony.helpers import buttons, utils
@@ -34,7 +34,7 @@ async def play_hndlr(
     video: bool = False,
     url: str = None,
 ) -> None:
-    if m.chat.type == types.enums.ChatType.PRIVATE:
+    if m.chat.type == enums.ChatType.PRIVATE:
         chats = await db.get_chats(user_id=m.from_user.id)
         if not chats:
             return await m.reply_text(m.lang["no_chats_to_play"])

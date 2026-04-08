@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
 
-from pyrogram import filters, types
+from pyrogram import enums, filters, types
 from anony import app, db, lang, anon, tg, queue
 from anony.helpers import buttons
 
@@ -236,7 +236,7 @@ async def _play_target_cb(_, query: types.CallbackQuery):
 
     # Spoof message to trigger play handler in target chat
     m = SimpleNamespace(
-        chat=SimpleNamespace(id=chat_id, type=types.enums.ChatType.SUPERGROUP),
+        chat=SimpleNamespace(id=chat_id, type=enums.ChatType.SUPERGROUP),
         text=command,
         command=command.split(),
         from_user=query.from_user,

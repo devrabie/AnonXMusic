@@ -93,7 +93,13 @@ class TgCall(PyTgCalls):
                     invite_link = chat.username
                 else:
                     invite_link = await app.export_chat_invite_link(chat_id)
-                await ub.join_chat(invite_link)
+
+                try:
+                    await ub.join_chat(invite_link)
+                except (getattr(errors, "InviteHashExpired", errors.Forbidden), getattr(errors, "InviteHashInvalid", errors.Forbidden)):
+                    invite_link = await app.export_chat_invite_link(chat_id)
+                    await ub.join_chat(invite_link)
+
                 await app.promote_chat_member(
                     chat_id, assistant_id,
                     privileges=pytypes.ChatPrivileges(
