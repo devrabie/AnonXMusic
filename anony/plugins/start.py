@@ -52,7 +52,7 @@ async def start(_, message: types.Message):
         if await db.is_chat(message.chat.id):
             return
         await utils.send_log(message, True)
-        await db.add_chat(message.chat.id)
+        await db.add_chat(message.chat.id, message.from_user.id)
 
 
 @app.on_message(filters.command(["playmode", "settings"]) & filters.group & ~app.bl_users)
@@ -82,4 +82,4 @@ async def _new_member(_, message: types.Message):
             if await db.is_chat(message.chat.id):
                 return
             await utils.send_log(message, True)
-            await db.add_chat(message.chat.id)
+            await db.add_chat(message.chat.id, message.from_user.id)

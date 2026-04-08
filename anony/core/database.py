@@ -44,13 +44,28 @@ class Database:
         await self.conn.execute("CREATE TABLE IF NOT EXISTS assistant (chat_id INTEGER PRIMARY KEY, num INTEGER)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS blacklist_chats (chat_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS blacklist_users (user_id INTEGER PRIMARY KEY)")
-        await self.conn.execute("CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER PRIMARY KEY, cmd_delete BOOLEAN DEFAULT 0, admin_play BOOLEAN DEFAULT 0)")
+        await self.conn.execute("CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER PRIMARY KEY, cmd_delete BOOLEAN DEFAULT 0, admin_play BOOLEAN DEFAULT 0, stream_url TEXT, stream_status BOOLEAN DEFAULT 0, added_by INTEGER)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS lang (chat_id INTEGER PRIMARY KEY, lang_code TEXT)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS logger (status BOOLEAN)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS sudoers (user_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS sessions (name TEXT PRIMARY KEY, string TEXT)")
+        await self._migrate_tables()
         await self.conn.commit()
+
+    async def _migrate_tables(self):
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_url TEXT")
+        except Exception:
+            pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_status BOOLEAN DEFAULT 0")
+        except Exception:
+            pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN added_by INTEGER")
+        except Exception:
+            pass
 
     async def close(self) -> None:
         if self.conn:
@@ -190,10 +205,10 @@ class Database:
     async def is_chat(self, chat_id: int) -> bool:
         return chat_id in self.chats
 
-    async def add_chat(self, chat_id: int) -> None:
+    async def add_chat(self, chat_id: int, user_id: int = None) -> None:
         if not await self.is_chat(chat_id):
             self.chats.append(chat_id)
-            await self.conn.execute("INSERT OR IGNORE INTO chats (chat_id) VALUES (?)", (chat_id,))
+            await self.conn.execute("INSERT OR IGNORE INTO chats (chat_id, added_by) VALUES (?, ?)", (chat_id, user_id))
             await self.conn.commit()
 
     async def rm_chat(self, chat_id: int) -> None:
@@ -202,12 +217,36 @@ class Database:
             await self.conn.execute("DELETE FROM chats WHERE chat_id = ?", (chat_id,))
             await self.conn.commit()
 
-    async def get_chats(self) -> list:
+    async def get_chats(self, user_id: int = None) -> list:
+        if user_id:
+            async with self.conn.execute("SELECT chat_id FROM chats WHERE added_by = ?", (user_id,)) as cursor:
+                rows = await cursor.fetchall()
+                return [row[0] for row in rows]
         if not self.chats:
             async with self.conn.execute("SELECT chat_id FROM chats") as cursor:
                 rows = await cursor.fetchall()
                 self.chats.extend([row[0] for row in rows])
         return self.chats
+
+    # STREAM METHODS
+    async def get_stream(self, chat_id: int):
+        async with self.conn.execute("SELECT stream_url, stream_status FROM chats WHERE chat_id = ?", (chat_id,)) as cursor:
+            row = await cursor.fetchone()
+            return row if row else (None, False)
+
+    async def set_stream(self, chat_id: int, url: str = None, status: bool = None):
+        if url is not None and status is not None:
+            await self.conn.execute("UPDATE chats SET stream_url = ?, stream_status = ? WHERE chat_id = ?", (url, status, chat_id))
+        elif url is not None:
+            await self.conn.execute("UPDATE chats SET stream_url = ? WHERE chat_id = ?", (url, chat_id))
+        elif status is not None:
+            await self.conn.execute("UPDATE chats SET stream_status = ? WHERE chat_id = ?", (status, chat_id))
+        await self.conn.commit()
+
+    async def get_active_streams(self) -> list:
+        async with self.conn.execute("SELECT chat_id, stream_url FROM chats WHERE stream_status = 1") as cursor:
+            rows = await cursor.fetchall()
+            return rows
 
     # COMMAND DELETE
     async def get_cmd_delete(self, chat_id: int) -> bool:

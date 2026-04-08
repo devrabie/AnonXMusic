@@ -46,11 +46,23 @@ class TgCall(PyTgCalls):
         self,
         chat_id: int,
         message: Message,
-        media: Media | Track,
+        media: Media | Track = None,
         seek_time: int = 0,
+        stream_url: str = None,
     ) -> None:
         client = await db.get_assistant(chat_id)
         _lang = await lang.get_lang(chat_id)
+
+        if stream_url:
+            media = Track(
+                id="live",
+                title="Live Stream",
+                duration="Live",
+                url=stream_url,
+                file_path=stream_url,
+                video=False,
+                user="System"
+            )
         _thumb = (
             await thumb.generate(media)
             if isinstance(media, Track)
@@ -89,6 +101,8 @@ class TgCall(PyTgCalls):
                     media.user,
                 )
                 keyboard = buttons.controls(chat_id)
+                if not message:
+                    return
                 try:
                     if _thumb:
                         await message.edit_media(
@@ -100,7 +114,7 @@ class TgCall(PyTgCalls):
                         )
                     else:
                         await message.edit_text(text, reply_markup=keyboard)
-                except (ChatSendMediaForbidden, ChatSendPhotosForbidden, MessageIdInvalid):
+                except (ChatSendMediaForbidden, ChatSendPhotosForbidden, MessageIdInvalid, AttributeError):
                     if _thumb:
                         sent = await app.send_photo(
                             chat_id=chat_id,
@@ -116,20 +130,25 @@ class TgCall(PyTgCalls):
                         )
                     media.message_id = sent.id
         except FileNotFoundError:
-            await message.edit_text(_lang["error_no_file"].format(config.SUPPORT_CHAT))
+            if message:
+                await message.edit_text(_lang["error_no_file"].format(config.SUPPORT_CHAT))
             await self.play_next(chat_id)
         except exceptions.NoActiveGroupCall:
             await self.stop(chat_id)
-            await message.edit_text(_lang["error_no_call"])
+            if message:
+                await message.edit_text(_lang["error_no_call"])
         except exceptions.NoAudioSourceFound:
-            await message.edit_text(_lang["error_no_audio"])
+            if message:
+                await message.edit_text(_lang["error_no_audio"])
             await self.play_next(chat_id)
         except (ConnectionError, ConnectionNotFound, TelegramServerError):
             await self.stop(chat_id)
-            await message.edit_text(_lang["error_tg_server"])
+            if message:
+                await message.edit_text(_lang["error_tg_server"])
         except RTMPStreamingUnsupported:
             await self.stop(chat_id)
-            await message.edit_text(_lang["error_rtmp"])
+            if message:
+                await message.edit_text(_lang["error_rtmp"])
 
 
     async def replay(self, chat_id: int) -> None:
@@ -187,7 +206,14 @@ class TgCall(PyTgCalls):
         async def update_handler(_, update: types.Update) -> None:
             if isinstance(update, types.StreamEnded):
                 if update.stream_type == types.StreamEnded.Type.AUDIO:
-                    await self.play_next(update.chat_id)
+                    chat_id = update.chat_id
+                    url, status = await db.get_stream(chat_id)
+                    if status and url:
+                        try:
+                            return await self.play_media(chat_id, None, stream_url=url)
+                        except Exception as e:
+                            logger.error(f"Failed to auto-restart stream in {chat_id}: {e}")
+                    await self.play_next(chat_id)
             elif isinstance(update, types.ChatUpdate):
                 if update.status in [
                     types.ChatUpdate.Status.KICKED,
@@ -205,3 +231,12 @@ class TgCall(PyTgCalls):
             self.clients.append(client)
             await self.decorators(client)
         logger.info("PyTgCalls client(s) started.")
+
+        # Auto-restart active streams
+        active_streams = await db.get_active_streams()
+        for chat_id, url in active_streams:
+            try:
+                await self.play_media(chat_id, None, stream_url=url)
+                logger.info(f"Auto-restarted stream in {chat_id}")
+            except Exception as e:
+                logger.error(f"Failed to auto-restart stream in {chat_id}: {e}")

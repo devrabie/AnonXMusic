@@ -1,0 +1,80 @@
+# Copyright (c) 2025 AnonymousX1025
+# Licensed under the MIT License.
+# This file is part of AnonXMusic
+
+from pyrogram import filters, types, Client
+from anony import app, db, lang, userbot, config, logger
+from anony.helpers import buttons
+
+@app.on_message(filters.command(["admin", "panel"]) & filters.user(app.owner) & filters.private)
+@lang.language()
+async def _admin_panel(_, m: types.Message):
+    await m.reply_text(
+        text=m.lang["admin_panel"],
+        reply_markup=buttons.admin_panel_markup(m.lang)
+    )
+
+@app.on_callback_query(filters.regex("admin_panel") & filters.user(app.owner))
+@lang.language()
+async def _admin_panel_cb(_, query: types.CallbackQuery):
+    await query.edit_message_text(
+        text=query.lang["admin_panel"],
+        reply_markup=buttons.admin_panel_markup(query.lang)
+    )
+
+@app.on_callback_query(filters.regex("manage_ass") & filters.user(app.owner))
+@lang.language()
+async def _manage_ass(_, query: types.CallbackQuery):
+    await query.edit_message_text(
+        text=query.lang["manage_assistants"],
+        reply_markup=buttons.assistants_markup(query.lang, userbot.clients)
+    )
+
+@app.on_callback_query(filters.regex("add_ass") & filters.user(app.owner))
+@lang.language()
+async def _add_ass(_, query: types.CallbackQuery):
+    await query.edit_message_text(query.lang["enter_session"])
+
+    response = await app.listen(query.message.chat.id, filters.user(app.owner) & filters.text, timeout=60)
+    if not response:
+        return
+
+    session = response.text
+    new_client = Client(
+        name="AnonyTemp",
+        api_id=config.API_ID,
+        api_hash=config.API_HASH,
+        session_string=session,
+        in_memory=True
+    )
+
+    try:
+        await new_client.start()
+        me = await new_client.get_me()
+        await db.set_session(f"assistant_{me.id}", session)
+        await userbot.boot_client(len(userbot.clients) + 1, new_client)
+        await response.reply_text(query.lang["assistant_added"])
+    except Exception as e:
+        await response.reply_text(f"{query.lang['invalid_session']}\n\nError: {e}")
+    finally:
+        # We don't stop it if it was successfully added to userbot.clients and it's handled there
+        # But boot_client already adds it. Wait, userbot.boot_client calls ub.start() again?
+        # No, boot_client takes the started client.
+        pass
+
+@app.on_callback_query(filters.regex(r"del_ass (\d+)") & filters.user(app.owner))
+@lang.language()
+async def _del_ass(_, query: types.CallbackQuery):
+    user_id = int(query.data.split()[1])
+    await db.conn.execute("DELETE FROM sessions WHERE string LIKE ?", (f"%{user_id}%",))
+    await db.conn.commit()
+
+    # Remove from active clients
+    for client in userbot.clients:
+        if client.me.id == user_id:
+            await client.stop()
+            userbot.clients.remove(client)
+            break
+
+    await query.answer(query.lang["assistant_deleted"])
+    await _manage_ass(_, query)

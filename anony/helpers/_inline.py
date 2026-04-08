@@ -132,6 +132,56 @@ class Inline:
             ]
         )
 
+    def admin_panel_markup(self, _lang: dict) -> types.InlineKeyboardMarkup:
+        return self.ikm(
+            [
+                [
+                    self.ikb(text=_lang["manage_assistants"], callback_data="manage_ass"),
+                ],
+                [
+                    self.ikb(text=_lang["stats_fetching"], callback_data="stats"),
+                    self.ikb(text=_lang["close"], callback_data="help close"),
+                ],
+            ]
+        )
+
+    def assistants_markup(self, _lang: dict, assistants: list) -> types.InlineKeyboardMarkup:
+        buttons = [
+            [self.ikb(text=f"@{u.username}" if u.username else u.name, callback_data=f"del_ass {u.id}")]
+            for u in assistants
+        ]
+        buttons.append([self.ikb(text=_lang["add_assistant"], callback_data="add_ass")])
+        buttons.append([self.ikb(text=_lang["back"], callback_data="admin_panel")])
+        return self.ikm(buttons)
+
+    def dashboard_markup(self, _lang: dict, chats: list) -> types.InlineKeyboardMarkup:
+        buttons = []
+        for chat_id, title in chats:
+            buttons.append([self.ikb(text=title, callback_data=f"manage_chat {chat_id}")])
+        buttons.append([self.ikb(text=_lang["close"], callback_data="help close")])
+        return self.ikm(buttons)
+
+    def stream_markup(self, _lang: dict, chat_id: int, status: bool) -> types.InlineKeyboardMarkup:
+        return self.ikm(
+            [
+                [
+                    self.ikb(text=_lang["stream_status"] + (": ON" if status else ": OFF"), callback_data="none"),
+                ],
+                [
+                    self.ikb(
+                        text=_lang["stop_stream"] if status else _lang["start_stream"],
+                        callback_data=f"toggle_stream {chat_id}",
+                    ),
+                ],
+                [
+                    self.ikb(text=_lang["set_url"], callback_data=f"set_url {chat_id}"),
+                ],
+                [
+                    self.ikb(text=_lang["back"], callback_data="manage_chats"),
+                ],
+            ]
+        )
+
     def start_key(
         self, lang: dict, private: bool = False
     ) -> types.InlineKeyboardMarkup:
@@ -146,6 +196,9 @@ class Inline:
             [
                 self.ikb(text=lang["support"], url=config.SUPPORT_CHAT),
                 self.ikb(text=lang["channel"], url=config.SUPPORT_CHANNEL),
+            ],
+            [
+                self.ikb(text=lang["dashboard"], callback_data="manage_chats"),
             ],
         ]
         if private:
