@@ -11,7 +11,10 @@ from anony.helpers import buttons
 async def _dashboard(_, m: types.Message):
     chats = await db.get_chats(user_id=m.from_user.id)
     if not chats:
-        return await m.reply_text(m.lang["no_chats"])
+        return await m.reply_text(
+            text=m.lang["no_chats"],
+            reply_markup=buttons.dashboard_markup(m.lang, [])
+        )
 
     chat_list = []
     for chat_id in chats:
@@ -31,7 +34,10 @@ async def _dashboard(_, m: types.Message):
 async def _manage_chats_cb(_, query: types.CallbackQuery):
     chats = await db.get_chats(user_id=query.from_user.id)
     if not chats:
-        return await query.answer(query.lang["no_chats"], show_alert=True)
+        return await query.edit_message_text(
+            text=query.lang["no_chats"],
+            reply_markup=buttons.dashboard_markup(query.lang, [])
+        )
 
     chat_list = []
     for chat_id in chats:

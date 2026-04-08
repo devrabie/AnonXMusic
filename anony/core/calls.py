@@ -5,7 +5,7 @@
 
 from ntgcalls import (ConnectionNotFound, TelegramServerError,
                       RTMPStreamingUnsupported, ConnectionError)
-from pyrogram import errors
+from pyrogram import errors, types as pytypes
 from pyrogram.types import InputMediaPhoto, Message
 from pytgcalls import PyTgCalls, exceptions, types
 from pytgcalls.pytgcalls_session import PyTgCallsSession
@@ -50,6 +50,31 @@ class TgCall(PyTgCalls):
         stream_url: str = None,
     ) -> None:
         client = await db.get_assistant(chat_id)
+
+        # Ensure assistant is in chat and promoted if stream_url is provided (dashboard start)
+        if stream_url:
+            try:
+                await app.get_chat_member(chat_id, client.id)
+            except Exception:
+                try:
+                    chat = await app.get_chat(chat_id)
+                    if chat.username:
+                        invite_link = chat.username
+                    else:
+                        invite_link = await app.export_chat_invite_link(chat_id)
+                    await client.join_chat(invite_link)
+                except Exception:
+                    pass
+
+            try:
+                await app.promote_chat_member(
+                    chat_id, client.id,
+                    privileges=pytypes.ChatPrivileges(
+                        can_manage_video_chats=True,
+                    )
+                )
+            except Exception:
+                pass
         _lang = await lang.get_lang(chat_id)
 
         if stream_url:

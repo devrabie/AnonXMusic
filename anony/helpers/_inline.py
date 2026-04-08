@@ -53,7 +53,7 @@ class Inline:
             rows = [
                 [
                     self.ikb(text=_lang["back"], callback_data="help back"),
-                    self.ikb(text=_lang["close"], callback_data="help close"),
+                    self.ikb(text=_lang["main_menu"], callback_data="start_back"),
                 ]
             ]
         else:
@@ -63,6 +63,7 @@ class Inline:
                 for i, cb in enumerate(cbs)
             ]
             rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
+            rows.append([self.ikb(text=_lang["back"], callback_data="start_back")])
 
         return self.ikm(rows)
 
@@ -140,7 +141,7 @@ class Inline:
                 ],
                 [
                     self.ikb(text=_lang["stats_fetching"], callback_data="stats"),
-                    self.ikb(text=_lang["close"], callback_data="help close"),
+                    self.ikb(text=_lang["main_menu"], callback_data="start_back"),
                 ],
             ]
         )
@@ -159,7 +160,7 @@ class Inline:
         for chat_id, title in chats:
             buttons.append([self.ikb(text=title, callback_data=f"manage_chat {chat_id}")])
         buttons.append([self.ikb(text=_lang["add_chat_manual"], callback_data="add_chat_manual")])
-        buttons.append([self.ikb(text=_lang["close"], callback_data="help close")])
+        buttons.append([self.ikb(text=_lang["main_menu"], callback_data="start_back")])
         return self.ikm(buttons)
 
     def stream_markup(self, _lang: dict, chat_id: int, status: bool) -> types.InlineKeyboardMarkup:

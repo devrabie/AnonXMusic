@@ -208,8 +208,12 @@ class Database:
     async def add_chat(self, chat_id: int, user_id: int = None) -> None:
         if not await self.is_chat(chat_id):
             self.chats.append(chat_id)
-            await self.conn.execute("INSERT OR IGNORE INTO chats (chat_id, added_by) VALUES (?, ?)", (chat_id, user_id))
-            await self.conn.commit()
+
+        await self.conn.execute(
+            "INSERT INTO chats (chat_id, added_by) VALUES (?, ?) ON CONFLICT(chat_id) DO UPDATE SET added_by = COALESCE(added_by, excluded.added_by)",
+            (chat_id, user_id)
+        )
+        await self.conn.commit()
 
     async def rm_chat(self, chat_id: int) -> None:
         if await self.is_chat(chat_id):

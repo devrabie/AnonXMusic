@@ -36,9 +36,8 @@ async def start(_, message: types.Message):
     )
 
     key = buttons.start_key(message.lang, private)
-    await message.reply_photo(
-        photo=config.START_IMG,
-        caption=_text,
+    await message.reply_text(
+        text=_text,
         reply_markup=key,
         quote=not private,
     )
@@ -49,10 +48,9 @@ async def start(_, message: types.Message):
         await utils.send_log(message)
         await db.add_user(message.from_user.id)
     else:
-        if await db.is_chat(message.chat.id):
-            return
-        await utils.send_log(message, True)
-        await db.add_chat(message.chat.id, message.from_user.id)
+        if not await db.is_chat(message.chat.id):
+            await utils.send_log(message, True)
+            await db.add_chat(message.chat.id, message.from_user.id)
 
 
 @app.on_message(filters.command(["playmode", "settings"]) & filters.group & ~app.bl_users)
@@ -107,8 +105,8 @@ async def _new_member(_, message: types.Message):
     await asyncio.sleep(3)
     for member in message.new_chat_members:
         if member.id == app.id:
-            if await db.is_chat(message.chat.id):
-                return
-            await utils.send_log(message, True)
-            await db.add_chat(message.chat.id, message.from_user.id)
+            if not await db.is_chat(message.chat.id):
+                user_id = message.from_user.id if message.from_user else None
+                await utils.send_log(message, True)
+                await db.add_chat(message.chat.id, user_id)
             await message.reply_text(message.lang["promote_me"])
