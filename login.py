@@ -45,6 +45,11 @@ async def login():
         await db.set_session(key, session_string)
         print(f"Successfully saved as assistant '{key}' in SQLite database.")
 
+        print("-" * 30)
+        print("Tip: If you encounter 'Sign in to confirm you’re not a bot' on YouTube,")
+        print("export your browser cookies as Netscape format, upload to batbin.me,")
+        print("and add the raw URL to COOKIES_URL in your .env file.")
+
     except Exception as e:
         print(f"\nAn error occurred: {e}")
     finally:

@@ -58,6 +58,10 @@ pip3 install -U -r requirements.txt
 # Login interactively (Optional, if you don't have session string)
 python3 login.py
 
+# Fix YouTube 'Sign in to confirm you’re not a bot' error:
+# 1. Export cookies from browser as Netscape format.
+# 2. Upload to a paste site (like batbin.me) and set the raw URL in COOKIES_URL in .env.
+
 # Rename and configure environment variables
 mv sample.env .env
 # Edit .env with your credentials

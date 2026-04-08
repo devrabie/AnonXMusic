@@ -129,8 +129,14 @@ class Database:
                 self.assistant[chat_id] = num
 
         if not anon.clients:
+            logger.warning(f"No streaming clients (anon.clients) available for chat {chat_id}.")
             return None
-        return anon.clients[self.assistant[chat_id] - 1]
+
+        try:
+            return anon.clients[self.assistant[chat_id] - 1]
+        except IndexError:
+            logger.warning(f"Assistant index {self.assistant[chat_id]-1} out of range for anon.clients.")
+            return None
 
     async def get_client(self, chat_id: int):
         from anony import userbot

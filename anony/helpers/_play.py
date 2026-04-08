@@ -50,6 +50,9 @@ def checkUB(play):
 
         if chat_id not in db.active_calls:
             client = await db.get_client(chat_id)
+            if not client:
+                return await m.reply_text(m.lang["play_no_assistant"])
+
             try:
                 member = await app.get_chat_member(chat_id, client.id)
                 if member.status in [
@@ -71,7 +74,7 @@ def checkUB(play):
                         )
             except errors.ChatAdminRequired:
                 return await m.reply_text(m.lang["admin_required"])
-            except (errors.UserNotParticipant, errors.exceptions.bad_request_400.UserNotParticipant, errors.PeerIdInvalid):
+            except Exception:
                 if m.chat.username:
                     invite_link = m.chat.username
                     try:
