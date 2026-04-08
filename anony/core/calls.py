@@ -273,7 +273,15 @@ class TgCall(PyTgCalls):
     async def decorators(self, client: PyTgCalls) -> None:
         ub = getattr(client, "app", getattr(client, "_app", None))
         if ub:
-            client.id = ub.id
+            assistant_id = getattr(ub, "id", None)
+            if not assistant_id:
+                try:
+                    me = getattr(ub, "me", None) or await ub.get_me()
+                    assistant_id = me.id
+                    ub.id = assistant_id
+                except Exception:
+                    assistant_id = None
+            client.id = assistant_id
 
         @client.on_update()
         async def update_handler(_, update: types.Update) -> None:

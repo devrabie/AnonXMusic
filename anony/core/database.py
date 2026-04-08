@@ -165,8 +165,17 @@ class Database:
 
         for client in anon.clients:
             ub = getattr(client, "app", getattr(client, "_app", None))
-            if ub and ub.id == self.assistant[chat_id]:
-                return client
+            if ub:
+                ub_id = getattr(ub, "id", None)
+                if not ub_id:
+                    try:
+                        me = getattr(ub, "me", None) or await ub.get_me()
+                        ub_id = me.id
+                        ub.id = ub_id
+                    except Exception:
+                        continue
+                if ub_id == self.assistant[chat_id]:
+                    return client
 
         # Fallback to first assistant if mapped one is missing
         return anon.clients[0]
@@ -182,6 +191,13 @@ class Database:
 
         for client in userbot.clients:
             client_id = getattr(client, "id", None)
+            if not client_id:
+                try:
+                    me = getattr(client, "me", None) or await client.get_me()
+                    client_id = me.id
+                    client.id = client_id
+                except Exception:
+                    continue
             if client_id == user_id:
                 return client
 

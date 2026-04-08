@@ -82,7 +82,7 @@ async def _del_ass(_, query: types.CallbackQuery):
 
     # Remove from active clients
     for client in userbot.clients:
-        if client.id == user_id:
+        if getattr(client, "id", None) == user_id:
             try:
                 await client.stop()
             except:
@@ -92,7 +92,7 @@ async def _del_ass(_, query: types.CallbackQuery):
 
     # Remove from calling clients
     for call_client in anon.clients:
-        if call_client.id == user_id:
+        if getattr(call_client, "id", None) == user_id:
             try:
                 await call_client.stop()
             except:
