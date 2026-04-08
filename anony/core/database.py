@@ -41,16 +41,47 @@ class Database:
 
     async def _create_tables(self):
         await self.conn.execute("CREATE TABLE IF NOT EXISTS auth (chat_id INTEGER, user_id INTEGER, PRIMARY KEY(chat_id, user_id))")
-        await self.conn.execute("CREATE TABLE IF NOT EXISTS assistant (chat_id INTEGER PRIMARY KEY, num INTEGER)")
+        await self.conn.execute("CREATE TABLE IF NOT EXISTS assistant (chat_id INTEGER PRIMARY KEY, user_id INTEGER)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS blacklist_chats (chat_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS blacklist_users (user_id INTEGER PRIMARY KEY)")
-        await self.conn.execute("CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER PRIMARY KEY, cmd_delete BOOLEAN DEFAULT 0, admin_play BOOLEAN DEFAULT 0)")
+        await self.conn.execute("CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER PRIMARY KEY, cmd_delete BOOLEAN DEFAULT 0, admin_play BOOLEAN DEFAULT 0, stream_url TEXT, stream_status BOOLEAN DEFAULT 0, added_by INTEGER)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS lang (chat_id INTEGER PRIMARY KEY, lang_code TEXT)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS logger (status BOOLEAN)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS sudoers (user_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS sessions (name TEXT PRIMARY KEY, string TEXT)")
+        await self._migrate_tables()
         await self.conn.commit()
+
+    async def _migrate_tables(self):
+        try:
+            async with self.conn.execute("PRAGMA table_info(assistant)") as cursor:
+                columns = [row[1] for row in await cursor.fetchall()]
+                if "num" in columns:
+                    await self.conn.execute("DROP TABLE assistant")
+                    await self.conn.execute("CREATE TABLE assistant (chat_id INTEGER PRIMARY KEY, user_id INTEGER)")
+        except Exception:
+            pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_url TEXT")
+        except Exception:
+            pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_status BOOLEAN DEFAULT 0")
+        except Exception:
+            pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN added_by INTEGER")
+        except Exception:
+            pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_type TEXT DEFAULT 'audio'")
+        except Exception:
+            pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_source TEXT DEFAULT 'url'")
+        except Exception:
+            pass
 
     async def close(self) -> None:
         if self.conn:
@@ -113,46 +144,64 @@ class Database:
     async def set_assistant(self, chat_id: int) -> int:
         from anony import userbot
         if not userbot.clients:
-            return 1
-        num = randint(1, len(userbot.clients))
-        await self.conn.execute("INSERT OR REPLACE INTO assistant (chat_id, num) VALUES (?, ?)", (chat_id, num))
+            return None
+        client = userbot.clients[randint(0, len(userbot.clients) - 1)]
+        user_id = client.id
+        await self.conn.execute("INSERT OR REPLACE INTO assistant (chat_id, user_id) VALUES (?, ?)", (chat_id, user_id))
         await self.conn.commit()
-        self.assistant[chat_id] = num
-        return num
+        self.assistant[chat_id] = user_id
+        return user_id
 
     async def get_assistant(self, chat_id: int):
         from anony import anon
         if chat_id not in self.assistant:
-            async with self.conn.execute("SELECT num FROM assistant WHERE chat_id = ?", (chat_id,)) as cursor:
+            async with self.conn.execute("SELECT user_id FROM assistant WHERE chat_id = ?", (chat_id,)) as cursor:
                 row = await cursor.fetchone()
-                num = row[0] if row else await self.set_assistant(chat_id)
-                self.assistant[chat_id] = num
+                user_id = row[0] if row else await self.set_assistant(chat_id)
+                self.assistant[chat_id] = user_id
 
         if not anon.clients:
-            logger.warning(f"No streaming clients (anon.clients) available for chat {chat_id}.")
             return None
 
-        try:
-            return anon.clients[self.assistant[chat_id] - 1]
-        except IndexError:
-            logger.warning(f"Assistant index {self.assistant[chat_id]-1} out of range for anon.clients.")
-            return None
+        for client in anon.clients:
+            ub = getattr(client, "app", getattr(client, "_app", None))
+            if ub:
+                ub_id = getattr(ub, "id", None)
+                if not ub_id:
+                    try:
+                        me = getattr(ub, "me", None) or await ub.get_me()
+                        ub_id = me.id
+                        ub.id = ub_id
+                    except Exception:
+                        continue
+                if ub_id == self.assistant[chat_id]:
+                    return client
+
+        # Fallback to first assistant if mapped one is missing
+        return anon.clients[0]
 
     async def get_client(self, chat_id: int):
         from anony import userbot
         if chat_id not in self.assistant:
             await self.get_assistant(chat_id)
 
-        num = self.assistant.get(chat_id)
-        if not num:
-            return None
+        user_id = self.assistant.get(chat_id)
+        if not user_id:
+            return userbot.clients[0] if userbot.clients else None
 
-        clients = {
-            1: getattr(userbot, "one", None),
-            2: getattr(userbot, "two", None),
-            3: getattr(userbot, "three", None)
-        }
-        return clients.get(num)
+        for client in userbot.clients:
+            client_id = getattr(client, "id", None)
+            if not client_id:
+                try:
+                    me = getattr(client, "me", None) or await client.get_me()
+                    client_id = me.id
+                    client.id = client_id
+                except Exception:
+                    continue
+            if client_id == user_id:
+                return client
+
+        return userbot.clients[0] if userbot.clients else None
 
     # BLACKLIST METHODS
     async def add_blacklist(self, chat_id: int) -> None:
@@ -190,11 +239,15 @@ class Database:
     async def is_chat(self, chat_id: int) -> bool:
         return chat_id in self.chats
 
-    async def add_chat(self, chat_id: int) -> None:
+    async def add_chat(self, chat_id: int, user_id: int = None) -> None:
         if not await self.is_chat(chat_id):
             self.chats.append(chat_id)
-            await self.conn.execute("INSERT OR IGNORE INTO chats (chat_id) VALUES (?)", (chat_id,))
-            await self.conn.commit()
+
+        await self.conn.execute(
+            "INSERT INTO chats (chat_id, added_by) VALUES (?, ?) ON CONFLICT(chat_id) DO UPDATE SET added_by = COALESCE(added_by, excluded.added_by)",
+            (chat_id, user_id)
+        )
+        await self.conn.commit()
 
     async def rm_chat(self, chat_id: int) -> None:
         if await self.is_chat(chat_id):
@@ -202,12 +255,38 @@ class Database:
             await self.conn.execute("DELETE FROM chats WHERE chat_id = ?", (chat_id,))
             await self.conn.commit()
 
-    async def get_chats(self) -> list:
+    async def get_chats(self, user_id: int = None) -> list:
+        if user_id:
+            async with self.conn.execute("SELECT chat_id FROM chats WHERE added_by = ?", (user_id,)) as cursor:
+                rows = await cursor.fetchall()
+                return [row[0] for row in rows]
         if not self.chats:
             async with self.conn.execute("SELECT chat_id FROM chats") as cursor:
                 rows = await cursor.fetchall()
                 self.chats.extend([row[0] for row in rows])
         return self.chats
+
+    # STREAM METHODS
+    async def get_stream(self, chat_id: int):
+        async with self.conn.execute("SELECT stream_url, stream_status, stream_type, stream_source FROM chats WHERE chat_id = ?", (chat_id,)) as cursor:
+            row = await cursor.fetchone()
+            return row if row else (None, False, "audio", "url")
+
+    async def set_stream(self, chat_id: int, url: str = None, status: bool = None, stype: str = None, source: str = None):
+        if url is not None:
+            await self.conn.execute("UPDATE chats SET stream_url = ? WHERE chat_id = ?", (url, chat_id))
+        if status is not None:
+            await self.conn.execute("UPDATE chats SET stream_status = ? WHERE chat_id = ?", (status, chat_id))
+        if stype is not None:
+            await self.conn.execute("UPDATE chats SET stream_type = ? WHERE chat_id = ?", (stype, chat_id))
+        if source is not None:
+            await self.conn.execute("UPDATE chats SET stream_source = ? WHERE chat_id = ?", (source, chat_id))
+        await self.conn.commit()
+
+    async def get_active_streams(self) -> list:
+        async with self.conn.execute("SELECT chat_id, stream_url, stream_type, stream_source FROM chats WHERE stream_status = 1") as cursor:
+            rows = await cursor.fetchall()
+            return rows
 
     # COMMAND DELETE
     async def get_cmd_delete(self, chat_id: int) -> bool:

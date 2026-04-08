@@ -135,17 +135,46 @@ class Telegram:
         )
 
     async def get_from_link(self, link: str, sent: types.Message) -> Media | None:
-        if "t.me/c/" in link:
-            chat = int("-100" + link.split("/")[-2])
-            msg_id = int(link.split("/")[-1])
-        else:
-            chat = link.split("/")[-2]
-            msg_id = int(link.split("/")[-1])
+        try:
+            link = link.strip()
+            if "t.me/c/" in link:
+                parts = link.split("/")
+                chat = int("-100" + parts[-2])
+                msg_id = int(parts[-1])
+            else:
+                parts = [p for p in link.split("/") if p]
+                chat = parts[-2]
+                if chat.replace("-", "").isdigit():
+                    chat = int(chat) if chat.startswith("-") else int("-100" + chat)
+                msg_id = int(parts[-1])
+        except (IndexError, ValueError):
+            return None
 
+        msg = None
+        # Try main bot first
         try:
             msg = await app.get_messages(chat, msg_id)
-            if not self.get_media(msg):
-                return None
-            return await self.download(msg, sent)
         except Exception:
+            pass
+
+        # Try assistants if main bot failed
+        if not msg or msg.empty:
+            from anony import userbot
+            for client in userbot.clients:
+                try:
+                    # Resolve peer before getting messages to avoid PeerIdInvalid/USERNAME_INVALID
+                    try:
+                        await client.resolve_peer(chat)
+                    except Exception:
+                        if isinstance(chat, str):
+                            continue
+                    msg = await client.get_messages(chat, msg_id)
+                    if msg and not msg.empty:
+                        break
+                except Exception:
+                    continue
+
+        if not msg or msg.empty or not self.get_media(msg):
             return None
+
+        return await self.download(msg, sent)

@@ -49,8 +49,13 @@ class Userbot(Client):
         Raises:
             SystemExit: If the client fails to send a message in the log group.
         """
-        await ub.start()
+        if not getattr(ub, "is_connected", False):
+            await ub.start()
         try:
+            try:
+                await ub.resolve_peer(config.LOGGER_ID)
+            except Exception:
+                pass
             await ub.send_message(config.LOGGER_ID, "Assistant Started")
         except Exception:
             logger.warning(f"Assistant {num} failed to send message in log group.")
@@ -60,10 +65,6 @@ class Userbot(Client):
         ub.username = ub.me.username
         ub.mention = ub.me.mention
         self.clients.append(ub)
-        try:
-            await ub.join_chat("fallenx")
-        except Exception:
-            pass
         logger.info(f"Assistant {num} started as @{ub.username}")
 
     async def boot(self):

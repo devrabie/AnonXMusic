@@ -6,7 +6,14 @@
 import time
 import asyncio
 import logging
+import pyrogram.errors
 from logging.handlers import RotatingFileHandler
+
+# Monkeypatch for compatibility with pytgcalls and different pyrogram versions
+if not hasattr(pyrogram.errors, "GroupcallForbidden"):
+    class GroupcallForbidden(pyrogram.errors.Forbidden):
+        pass
+    pyrogram.errors.GroupcallForbidden = GroupcallForbidden
 
 logging.basicConfig(
     format="[%(asctime)s - %(levelname)s] - %(name)s: %(message)s",

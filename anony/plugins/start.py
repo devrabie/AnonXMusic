@@ -5,7 +5,7 @@
 import asyncio
 from pyrogram import enums, filters, types
 
-from anony import app, config, db, lang
+from anony import app, config, db, lang, userbot
 from anony.helpers import buttons, utils
 
 
@@ -35,10 +35,9 @@ async def start(_, message: types.Message):
         else message.lang["start_gp"].format(app.name)
     )
 
-    key = buttons.start_key(message.lang, private)
-    await message.reply_photo(
-        photo=config.START_IMG,
-        caption=_text,
+    key = buttons.start_key(message.lang, private, message.from_user.id)
+    await message.reply_text(
+        text=_text,
         reply_markup=key,
         quote=not private,
     )
@@ -49,10 +48,9 @@ async def start(_, message: types.Message):
         await utils.send_log(message)
         await db.add_user(message.from_user.id)
     else:
-        if await db.is_chat(message.chat.id):
-            return
-        await utils.send_log(message, True)
-        await db.add_chat(message.chat.id)
+        if not await db.is_chat(message.chat.id):
+            await utils.send_log(message, True)
+            await db.add_chat(message.chat.id, message.from_user.id)
 
 
 @app.on_message(filters.command(["playmode", "settings"]) & filters.group & ~app.bl_users)
@@ -70,16 +68,45 @@ async def settings(_, message: types.Message):
     )
 
 
+@app.on_chat_member_updated()
+@lang.language()
+async def _member_update(_, update: types.ChatMemberUpdated):
+    if not update.new_chat_member:
+        return
+
+    if update.new_chat_member.user.id == app.id:
+        if update.new_chat_member.status == enums.ChatMemberStatus.ADMINISTRATOR:
+            if not await db.is_chat(update.chat.id):
+                user_id = update.from_user.id if update.from_user else None
+                await db.add_chat(update.chat.id, user_id)
+                await app.send_message(
+                    update.chat.id,
+                    update.lang["chat_added"].format(update.chat.title)
+                )
+
+            # Assistant join logic
+            try:
+                client = await db.get_assistant(update.chat.id)
+                if client:
+                    try:
+                        await client.get_chat_member(update.chat.id, client.id)
+                    except Exception:
+                        if update.chat.username:
+                            invite_link = update.chat.username
+                        else:
+                            invite_link = await app.export_chat_invite_link(update.chat.id)
+                        await client.join_chat(invite_link)
+            except Exception:
+                pass
+
 @app.on_message(filters.new_chat_members, group=7)
 @lang.language()
 async def _new_member(_, message: types.Message):
-    if message.chat.type != enums.ChatType.SUPERGROUP:
-        return await message.chat.leave()
-
     await asyncio.sleep(3)
     for member in message.new_chat_members:
         if member.id == app.id:
-            if await db.is_chat(message.chat.id):
-                return
-            await utils.send_log(message, True)
-            await db.add_chat(message.chat.id)
+            if not await db.is_chat(message.chat.id):
+                user_id = message.from_user.id if message.from_user else None
+                await utils.send_log(message, True)
+                await db.add_chat(message.chat.id, user_id)
+            await message.reply_text(message.lang["promote_me"])

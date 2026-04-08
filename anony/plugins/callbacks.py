@@ -5,7 +5,7 @@
 
 import re
 
-from pyrogram import errors, filters, types
+from pyrogram import enums, errors, filters, types
 
 from anony import anon, app, db, lang, queue, tg, yt
 from anony.helpers import admin_check, buttons, can_manage_vc
@@ -128,7 +128,9 @@ async def _controls(_, query: types.CallbackQuery):
 async def _help(_, query: types.CallbackQuery):
     data = query.data.split()
     if len(data) == 1:
-        return await query.answer(url=f"https://t.me/{app.username}?start=help")
+        return await query.edit_message_text(
+            text=query.lang["help_menu"], reply_markup=buttons.help_markup(query.lang)
+        )
 
     if data[1] == "back":
         return await query.edit_message_text(
@@ -143,9 +145,23 @@ async def _help(_, query: types.CallbackQuery):
 
     await query.edit_message_text(
         text=query.lang[f"help_{data[1]}"],
-        reply_markup=buttons.help_markup(query.lang, True),
+        reply_markup=buttons.help_markup(query.lang, back=True),
     )
 
+
+@app.on_callback_query(filters.regex("start_back") & ~app.bl_users)
+@lang.language()
+async def _start_back(_, query: types.CallbackQuery):
+    private = query.message.chat.type == enums.ChatType.PRIVATE
+    _text = (
+        query.lang["start_pm"].format(query.from_user.first_name, app.name)
+        if private
+        else query.lang["start_gp"].format(app.name)
+    )
+    await query.edit_message_text(
+        text=_text,
+        reply_markup=buttons.start_key(query.lang, private, query.from_user.id)
+    )
 
 @app.on_callback_query(filters.regex("settings") & ~app.bl_users)
 @lang.language()

@@ -17,7 +17,7 @@ def checkUB(play):
             return await m.reply_text(m.lang["play_user_invalid"])
 
         chat_id = m.chat.id
-        if m.chat.type != enums.ChatType.SUPERGROUP:
+        if m.chat.type != enums.ChatType.SUPERGROUP and m.chat.type != enums.ChatType.PRIVATE:
             await m.reply_text(m.lang["play_chat_invalid"])
             return await app.leave_chat(chat_id)
 
@@ -97,6 +97,14 @@ def checkUB(play):
                 await asyncio.sleep(2)
                 try:
                     await client.join_chat(invite_link)
+                except (getattr(errors, "InviteHashExpired", errors.Forbidden), getattr(errors, "InviteHashInvalid", errors.Forbidden)):
+                    try:
+                        invite_link = await app.export_chat_invite_link(chat_id)
+                        await client.join_chat(invite_link)
+                    except Exception as ex:
+                        return await umm.edit_text(
+                            m.lang["play_invite_error"].format(type(ex).__name__)
+                        )
                 except errors.UserAlreadyParticipant:
                     pass
                 except errors.InviteRequestSent:

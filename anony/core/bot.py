@@ -4,6 +4,7 @@
 
 
 import pyrogram
+from pyromod import listen
 
 from anony import config, logger
 
@@ -17,7 +18,7 @@ class Bot(pyrogram.Client):
             bot_token=config.BOT_TOKEN,
             parse_mode=pyrogram.enums.ParseMode.HTML,
             max_concurrent_transmissions=7,
-            link_preview_options=pyrogram.types.LinkPreviewOptions(is_disabled=True),
+            in_memory=True,
         )
         self.owner = config.OWNER_ID
         self.logger = config.LOGGER_ID
@@ -38,6 +39,10 @@ class Bot(pyrogram.Client):
         self.mention = self.me.mention
 
         try:
+            try:
+                await self.resolve_peer(self.logger)
+            except Exception:
+                pass
             await self.send_message(self.logger, "Bot Started")
             get = await self.get_chat_member(self.logger, self.id)
             if get.status != pyrogram.enums.ChatMemberStatus.ADMINISTRATOR:

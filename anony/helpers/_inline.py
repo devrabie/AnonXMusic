@@ -44,6 +44,10 @@ class Inline:
                     self.ikb(text="▢", callback_data=f"controls stop {chat_id}"),
                 ]
             )
+
+        # Add Dashboard link to controls if private or if we want easier access
+        keyboard.append([self.ikb(text="📊 Dashboard", callback_data="manage_chats")])
+
         return self.ikm(keyboard)
 
     def help_markup(
@@ -53,7 +57,7 @@ class Inline:
             rows = [
                 [
                     self.ikb(text=_lang["back"], callback_data="help back"),
-                    self.ikb(text=_lang["close"], callback_data="help close"),
+                    self.ikb(text=_lang["main_menu"], callback_data="start_back"),
                 ]
             ]
         else:
@@ -63,6 +67,7 @@ class Inline:
                 for i, cb in enumerate(cbs)
             ]
             rows = [buttons[i : i + 3] for i in range(0, len(buttons), 3)]
+            rows.append([self.ikb(text=_lang["back"], callback_data="start_back")])
 
         return self.ikm(rows)
 
@@ -132,32 +137,107 @@ class Inline:
             ]
         )
 
-    def start_key(
-        self, lang: dict, private: bool = False
-    ) -> types.InlineKeyboardMarkup:
-        rows = [
+    def admin_panel_markup(self, _lang: dict) -> types.InlineKeyboardMarkup:
+        return self.ikm(
             [
-                self.ikb(
-                    text=lang["add_me"],
-                    url=f"https://t.me/{app.username}?startgroup=true",
-                )
-            ],
-            [self.ikb(text=lang["help"], callback_data="help")],
+                [
+                    self.ikb(text=_lang["manage_assistants"], callback_data="manage_ass"),
+                ],
+                [
+                    self.ikb(text=_lang["stats_fetching"], callback_data="stats"),
+                    self.ikb(text=_lang["main_menu"], callback_data="start_back"),
+                ],
+            ]
+        )
+
+    def assistants_markup(self, _lang: dict, assistants: list) -> types.InlineKeyboardMarkup:
+        buttons = []
+        for u in assistants:
+            # Handle both Pyrogram Client and User objects
+            username = getattr(u, "username", None) or getattr(getattr(u, "me", None), "username", None)
+            first_name = getattr(u, "first_name", None) or getattr(getattr(u, "me", None), "first_name", "Assistant")
+            user_id = getattr(u, "id", None) or getattr(getattr(u, "me", None), "id", 0)
+
+            buttons.append([self.ikb(text=f"🗑️ @{username}" if username else first_name, callback_data=f"del_ass {user_id}")])
+
+        buttons.append([self.ikb(text=_lang["add_assistant"], callback_data="add_ass")])
+        buttons.append([self.ikb(text=_lang["back"], callback_data="admin_panel")])
+        return self.ikm(buttons)
+
+    def dashboard_markup(self, _lang: dict, chats: list) -> types.InlineKeyboardMarkup:
+        buttons = []
+        for chat_id, title in chats:
+            buttons.append([self.ikb(text=title, callback_data=f"manage_chat {chat_id}")])
+
+        buttons.append([
+            self.ikb(text=_lang["add_group"], url=f"https://t.me/{app.username}?startgroup=true&admin=post_messages+edit_messages+delete_messages+add_admins+invite_users+manage_video_chats"),
+            self.ikb(text=_lang["add_channel"], url=f"https://t.me/{app.username}?startchannel=true&admin=post_messages+edit_messages+delete_messages+add_admins+invite_users+manage_video_chats"),
+        ])
+        buttons.append([self.ikb(text=_lang["add_chat_manual"], callback_data="add_chat_manual")])
+        buttons.append([self.ikb(text=_lang["main_menu"], callback_data="start_back")])
+        return self.ikm(buttons)
+
+    def cancel_markup(self, _lang: dict) -> types.InlineKeyboardMarkup:
+        return self.ikm([[self.ikb(text=_lang["cancel"], callback_data="start_back")]])
+
+    def play_chat_markup(self, _lang: dict, chats: list, command: str) -> types.InlineKeyboardMarkup:
+        buttons = []
+        for chat_id, title in chats:
+            buttons.append([self.ikb(text=title, callback_data=f"play_target {chat_id} {command}")])
+
+        buttons.append([self.ikb(text=_lang["back"], callback_data="start_back")])
+        return self.ikm(buttons)
+
+    def stream_markup(self, _lang: dict, chat_id: int, status: bool, stype: str = "audio", source: str = "url") -> types.InlineKeyboardMarkup:
+        return self.ikm(
             [
-                self.ikb(text=lang["support"], url=config.SUPPORT_CHAT),
-                self.ikb(text=lang["channel"], url=config.SUPPORT_CHANNEL),
-            ],
-        ]
-        if private:
-            rows += [
+                [
+                    self.ikb(text=_lang["stream_status"] + (": ON" if status else ": OFF"), callback_data="none"),
+                ],
+                [
+                    self.ikb(text=_lang["stream_type"] + (": 🎧" if stype == "audio" else ": 📺"), callback_data=f"toggle_stype {chat_id}"),
+                    self.ikb(text=_lang["stream_source"] + (": 🔗" if source == "url" else ": 📑"), callback_data=f"toggle_source {chat_id}"),
+                ],
                 [
                     self.ikb(
-                        text=lang["source"],
-                        url="https://github.com/AnonymousX1025/AnonXMusic",
-                    )
+                        text=_lang["stop_stream"] if status else _lang["start_stream"],
+                        callback_data=f"toggle_stream {chat_id}",
+                    ),
+                ],
+                [
+                    self.ikb(text=_lang["set_url"], callback_data=f"set_url {chat_id}"),
+                    self.ikb(text=_lang["add_local_media"], callback_data=f"add_local {chat_id}"),
+                ],
+                [
+                    self.ikb(text=_lang["back"], callback_data="manage_chats"),
+                ],
+            ]
+        )
+
+    def start_key(
+        self, lang: dict, private: bool = False, user_id: int = None
+    ) -> types.InlineKeyboardMarkup:
+        if private:
+            rows = [
+                [
+                    self.ikb(text=lang["add_group"], url=f"https://t.me/{app.username}?startgroup=true&admin=post_messages+edit_messages+delete_messages+add_admins+invite_users+manage_video_chats"),
+                    self.ikb(text=lang["add_channel"], url=f"https://t.me/{app.username}?startchannel=true&admin=post_messages+edit_messages+delete_messages+add_admins+invite_users+manage_video_chats"),
+                ],
+                [
+                    self.ikb(text=lang["my_chats"], callback_data="manage_chats"),
+                    self.ikb(text=lang["help"], callback_data="help"),
+                ],
+            ]
+            if user_id and user_id == app.owner:
+                rows.append([self.ikb(text=lang["admin_panel"], callback_data="admin_panel")])
+        else:
+            rows = [
+                [
+                    self.ikb(text=lang["help"], callback_data="help"),
                 ]
             ]
-        else:
+
+        if not private:
             rows += [[self.ikb(text=lang["language"], callback_data="language")]]
         return self.ikm(rows)
 
