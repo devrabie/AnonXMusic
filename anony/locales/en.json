@@ -182,5 +182,8 @@
     "enter_chat_id": "Please send the Chat ID of the channel or group.",
     "chat_added": "Successfully added {0}!",
     "invalid_chat_id": "Invalid Chat ID or chat not found.",
-    "promote_me": "Please promote the bot as an admin in the channel or group with all required permissions."
+    "promote_me": "Please promote the bot as an admin in the channel or group with all required permissions.",
+    "add_local_media": "Add Telegram Media",
+    "enter_telegram_link": "Please send a public Telegram link (e.g., https://t.me/txjxvx/119033)",
+    "invalid_telegram_link": "Invalid Telegram link or no supported media found."
 }

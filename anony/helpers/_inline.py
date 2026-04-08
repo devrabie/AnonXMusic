@@ -176,6 +176,7 @@ class Inline:
                 ],
                 [
                     self.ikb(text=_lang["set_url"], callback_data=f"set_url {chat_id}"),
+                    self.ikb(text=_lang["add_local_media"], callback_data=f"add_local {chat_id}"),
                 ],
                 [
                     self.ikb(text=_lang["back"], callback_data="manage_chats"),
@@ -198,16 +199,7 @@ class Inline:
                 self.ikb(text=lang["dashboard"], callback_data="manage_chats"),
             ],
         ]
-        if private:
-            rows += [
-                [
-                    self.ikb(
-                        text=lang["source"],
-                        url="https://github.com/AnonymousX1025/AnonXMusic",
-                    )
-                ]
-            ]
-        else:
+        if not private:
             rows += [[self.ikb(text=lang["language"], callback_data="language")]]
         return self.ikm(rows)
 

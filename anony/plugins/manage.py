@@ -3,7 +3,7 @@
 # This file is part of AnonXMusic
 
 from pyrogram import filters, types
-from anony import app, db, lang, anon
+from anony import app, db, lang, anon, tg, queue
 from anony.helpers import buttons
 
 @app.on_message(filters.command(["manage", "dashboard"]) & filters.private)
@@ -70,7 +70,7 @@ async def _toggle_stream(_, query: types.CallbackQuery):
     await db.set_stream(chat_id, status=new_status)
 
     if new_status:
-        await anon.play_media(chat_id, query.message, types.Message(text=url), stream_url=url)
+        await anon.play_media(chat_id, query.message, stream_url=url)
         await query.answer(query.lang["stream_on"])
     else:
         await anon.stop(chat_id)
@@ -84,7 +84,7 @@ async def _set_url(_, query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
     await query.edit_message_text(query.lang["enter_url"])
 
-    response = await app.listen(query.message.chat.id, filters.user(query.from_user.id) & filters.text, timeout=60)
+    response = await app.listen(query.message.chat.id, filters.text, timeout=60)
     if not response:
         return
 
@@ -102,7 +102,7 @@ async def _set_url(_, query: types.CallbackQuery):
 async def _add_chat_manual(_, query: types.CallbackQuery):
     await query.edit_message_text(query.lang["enter_chat_id"])
 
-    response = await app.listen(query.message.chat.id, filters.user(query.from_user.id) & filters.text, timeout=60)
+    response = await app.listen(query.message.chat.id, filters.text, timeout=60)
     if not response:
         return
 
@@ -114,3 +114,43 @@ async def _add_chat_manual(_, query: types.CallbackQuery):
         await _manage_chats_cb(_, query)
     except Exception:
         await response.reply_text(query.lang["invalid_chat_id"])
+
+@app.on_callback_query(filters.regex(r"add_local (-?\d+)"))
+@lang.language()
+async def _add_local(_, query: types.CallbackQuery):
+    chat_id = int(query.data.split()[1])
+    await query.edit_message_text(query.lang["enter_telegram_link"])
+
+    response = await app.listen(query.message.chat.id, filters.text, timeout=60)
+    if not response:
+        return
+
+    link = response.text
+    sent = await response.reply_text(query.lang["processing"])
+
+    try:
+        media = await tg.get_from_link(link, sent)
+        if not media:
+            return await sent.edit_text(query.lang["invalid_telegram_link"])
+
+        media.user = query.from_user.mention
+        position = queue.add(chat_id, media)
+
+        if position != 0 or await db.get_call(chat_id):
+            await sent.edit_text(
+                query.lang["play_queued"].format(
+                    position,
+                    media.url,
+                    media.title,
+                    media.duration,
+                    query.from_user.mention,
+                )
+            )
+        else:
+            await anon.play_media(chat_id, sent, media)
+
+    except Exception as e:
+        await sent.edit_text(f"Error: {e}")
+
+    # Refresh dashboard after a delay
+    await _manage_chat(_, query)

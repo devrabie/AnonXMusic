@@ -35,7 +35,7 @@ async def _manage_ass(_, query: types.CallbackQuery):
 async def _add_ass(_, query: types.CallbackQuery):
     await query.edit_message_text(query.lang["enter_session"])
 
-    response = await app.listen(query.message.chat.id, filters.user(app.owner) & filters.text, timeout=60)
+    response = await app.listen(query.message.chat.id, filters.text, timeout=60)
     if not response:
         return
 
