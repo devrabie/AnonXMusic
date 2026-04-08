@@ -31,6 +31,8 @@ class Database:
         try:
             start = time()
             self.conn = await aiosqlite.connect(self.db_path)
+            await self.conn.execute("PRAGMA journal_mode=WAL;")
+            await self.conn.execute("PRAGMA busy_timeout=5000;")
             await self._create_tables()
             logger.info(f"Database connection successful. ({time() - start:.2f}s)")
             await self.load_cache()

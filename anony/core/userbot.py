@@ -36,6 +36,7 @@ class Userbot(Client):
                 api_id=config.API_ID,
                 api_hash=config.API_HASH,
                 session_string=session,
+                in_memory=True,
             ),
         )
 
@@ -63,7 +64,7 @@ class Userbot(Client):
             await ub.join_chat("fallenx")
         except Exception:
             pass
-        logger.info(f"Assistant {num} started as @{client.username}")
+        logger.info(f"Assistant {num} started as @{ub.username}")
 
     async def boot(self):
         """
