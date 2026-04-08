@@ -109,6 +109,9 @@ class Database:
 
     # ASSISTANT METHODS
     async def set_assistant(self, chat_id: int) -> int:
+        from anony import userbot
+        if not userbot.clients:
+            return 1
         num = randint(1, len(userbot.clients))
         await self.conn.execute("INSERT OR REPLACE INTO assistant (chat_id, num) VALUES (?, ?)", (chat_id, num))
         await self.conn.commit()
@@ -122,12 +125,26 @@ class Database:
                 row = await cursor.fetchone()
                 num = row[0] if row else await self.set_assistant(chat_id)
                 self.assistant[chat_id] = num
+
+        if not anon.clients:
+            return None
         return anon.clients[self.assistant[chat_id] - 1]
 
     async def get_client(self, chat_id: int):
+        from anony import userbot
         if chat_id not in self.assistant:
             await self.get_assistant(chat_id)
-        return {1: userbot.one, 2: userbot.two, 3: userbot.three}.get(self.assistant[chat_id])
+
+        num = self.assistant.get(chat_id)
+        if not num:
+            return None
+
+        clients = {
+            1: getattr(userbot, "one", None),
+            2: getattr(userbot, "two", None),
+            3: getattr(userbot, "three", None)
+        }
+        return clients.get(num)
 
     # BLACKLIST METHODS
     async def add_blacklist(self, chat_id: int) -> None:

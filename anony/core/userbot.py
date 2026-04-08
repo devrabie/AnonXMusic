@@ -48,23 +48,17 @@ class Userbot(Client):
         Raises:
             SystemExit: If the client fails to send a message in the log group.
         """
-        clients = {
-            1: self.one,
-            2: self.two,
-            3: self.three,
-        }
-        client = clients[num]
-        await client.start()
+        await ub.start()
         try:
-            await client.send_message(config.LOGGER_ID, "Assistant Started")
+            await ub.send_message(config.LOGGER_ID, "Assistant Started")
         except Exception:
             raise SystemExit(f"Assistant {num} failed to send message in log group.")
 
-        client.id = ub.me.id
-        client.name = ub.me.first_name
-        client.username = ub.me.username
-        client.mention = ub.me.mention
-        self.clients.append(client)
+        ub.id = ub.me.id
+        ub.name = ub.me.first_name
+        ub.username = ub.me.username
+        ub.mention = ub.me.mention
+        self.clients.append(ub)
         try:
             await ub.join_chat("fallenx")
         except Exception:
