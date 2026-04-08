@@ -44,6 +44,10 @@ class Inline:
                     self.ikb(text="▢", callback_data=f"controls stop {chat_id}"),
                 ]
             )
+
+        # Add Dashboard link to controls if private or if we want easier access
+        keyboard.append([self.ikb(text="📊 Dashboard", callback_data="manage_chats")])
+
         return self.ikm(keyboard)
 
     def help_markup(
@@ -171,11 +175,12 @@ class Inline:
     def cancel_markup(self, _lang: dict) -> types.InlineKeyboardMarkup:
         return self.ikm([[self.ikb(text=_lang["cancel"], callback_data="start_back")]])
 
-    def stream_markup(self, _lang: dict, chat_id: int, status: bool) -> types.InlineKeyboardMarkup:
+    def stream_markup(self, _lang: dict, chat_id: int, status: bool, stype: str = "audio") -> types.InlineKeyboardMarkup:
         return self.ikm(
             [
                 [
                     self.ikb(text=_lang["stream_status"] + (": ON" if status else ": OFF"), callback_data="none"),
+                    self.ikb(text=_lang["stream_type"] + (": 🎧" if stype == "audio" else ": 📺"), callback_data=f"toggle_stype {chat_id}"),
                 ],
                 [
                     self.ikb(

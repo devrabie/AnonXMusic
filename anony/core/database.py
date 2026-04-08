@@ -66,6 +66,10 @@ class Database:
             await self.conn.execute("ALTER TABLE chats ADD COLUMN added_by INTEGER")
         except Exception:
             pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_type TEXT DEFAULT 'audio'")
+        except Exception:
+            pass
 
     async def close(self) -> None:
         if self.conn:
@@ -234,21 +238,21 @@ class Database:
 
     # STREAM METHODS
     async def get_stream(self, chat_id: int):
-        async with self.conn.execute("SELECT stream_url, stream_status FROM chats WHERE chat_id = ?", (chat_id,)) as cursor:
+        async with self.conn.execute("SELECT stream_url, stream_status, stream_type FROM chats WHERE chat_id = ?", (chat_id,)) as cursor:
             row = await cursor.fetchone()
-            return row if row else (None, False)
+            return row if row else (None, False, "audio")
 
-    async def set_stream(self, chat_id: int, url: str = None, status: bool = None):
-        if url is not None and status is not None:
-            await self.conn.execute("UPDATE chats SET stream_url = ?, stream_status = ? WHERE chat_id = ?", (url, status, chat_id))
-        elif url is not None:
+    async def set_stream(self, chat_id: int, url: str = None, status: bool = None, stype: str = None):
+        if url is not None:
             await self.conn.execute("UPDATE chats SET stream_url = ? WHERE chat_id = ?", (url, chat_id))
-        elif status is not None:
+        if status is not None:
             await self.conn.execute("UPDATE chats SET stream_status = ? WHERE chat_id = ?", (status, chat_id))
+        if stype is not None:
+            await self.conn.execute("UPDATE chats SET stream_type = ? WHERE chat_id = ?", (stype, chat_id))
         await self.conn.commit()
 
     async def get_active_streams(self) -> list:
-        async with self.conn.execute("SELECT chat_id, stream_url FROM chats WHERE stream_status = 1") as cursor:
+        async with self.conn.execute("SELECT chat_id, stream_url, stream_type FROM chats WHERE stream_status = 1") as cursor:
             rows = await cursor.fetchall()
             return rows
 

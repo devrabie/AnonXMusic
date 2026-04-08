@@ -3,7 +3,8 @@
 # This file is part of AnonXMusic
 
 from pyrogram import filters, types, Client
-from anony import app, db, lang, userbot, config, logger
+from pytgcalls import PyTgCalls
+from anony import app, db, lang, userbot, config, logger, anon
 from anony.helpers import buttons
 
 @app.on_message(filters.command(["admin", "panel"]) & filters.user(app.owner) & filters.private)
@@ -56,6 +57,13 @@ async def _add_ass(_, query: types.CallbackQuery):
         me = await new_client.get_me()
         await db.set_session(f"assistant_{me.id}", session)
         await userbot.boot_client(len(userbot.clients) + 1, new_client)
+
+        # Initialize calling client for the new assistant
+        call_client = PyTgCalls(new_client, cache_duration=100)
+        await call_client.start()
+        anon.clients.append(call_client)
+        await anon.decorators(call_client)
+
         await response.reply_text(query.lang["assistant_added"])
     except Exception as e:
         await response.reply_text(f"{query.lang['invalid_session']}\n\nError: {e}")
@@ -75,8 +83,21 @@ async def _del_ass(_, query: types.CallbackQuery):
     # Remove from active clients
     for client in userbot.clients:
         if client.me.id == user_id:
-            await client.stop()
+            try:
+                await client.stop()
+            except:
+                pass
             userbot.clients.remove(client)
+            break
+
+    # Remove from calling clients
+    for call_client in anon.clients:
+        if call_client.app.me.id == user_id:
+            try:
+                await call_client.stop()
+            except:
+                pass
+            anon.clients.remove(call_client)
             break
 
     await query.answer(query.lang["assistant_deleted"])

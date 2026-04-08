@@ -48,29 +48,38 @@ class TgCall(PyTgCalls):
         media: Media | Track = None,
         seek_time: int = 0,
         stream_url: str = None,
+        video: bool = False,
     ) -> None:
         client = await db.get_assistant(chat_id)
+        assistant_id = client.app.me.id
 
-        # Ensure assistant is in chat and promoted if stream_url is provided (dashboard start)
-        if stream_url:
-            try:
-                await app.get_chat_member(chat_id, client.id)
-            except Exception:
+        # Ensure assistant is in chat and promoted
+        try:
+            member = await app.get_chat_member(chat_id, assistant_id)
+            if member.status not in [pytypes.ChatMemberStatus.ADMINISTRATOR, pytypes.ChatMemberStatus.OWNER]:
                 try:
-                    chat = await app.get_chat(chat_id)
-                    if chat.username:
-                        invite_link = chat.username
-                    else:
-                        invite_link = await app.export_chat_invite_link(chat_id)
-                    await client.join_chat(invite_link)
+                    await app.promote_chat_member(
+                        chat_id, assistant_id,
+                        privileges=pytypes.ChatPrivileges(
+                            can_manage_video_chats=True,
+                            can_invite_users=True,
+                        )
+                    )
                 except Exception:
                     pass
-
+        except Exception:
             try:
+                chat = await app.get_chat(chat_id)
+                if chat.username:
+                    invite_link = chat.username
+                else:
+                    invite_link = await app.export_chat_invite_link(chat_id)
+                await client.app.join_chat(invite_link)
                 await app.promote_chat_member(
-                    chat_id, client.id,
+                    chat_id, assistant_id,
                     privileges=pytypes.ChatPrivileges(
                         can_manage_video_chats=True,
+                        can_invite_users=True,
                     )
                 )
             except Exception:
@@ -84,7 +93,7 @@ class TgCall(PyTgCalls):
                 duration="Live",
                 url=stream_url,
                 file_path=stream_url,
-                video=False,
+                video=video,
                 user="System"
             )
             _thumb = config.DEFAULT_THUMB if config.THUMB_GEN else None
@@ -105,7 +114,11 @@ class TgCall(PyTgCalls):
                 audio_parameters=types.AudioQuality.HIGH,
                 video_parameters=types.VideoQuality.HD_720p,
                 audio_flags=types.MediaStream.Flags.REQUIRED,
-                video_flags=types.MediaStream.Flags.IGNORE,
+                video_flags=(
+                    types.MediaStream.Flags.AUTO_DETECT
+                    if video
+                    else types.MediaStream.Flags.IGNORE
+                ),
             )
         else:
             stream = types.MediaStream(
@@ -242,10 +255,10 @@ class TgCall(PyTgCalls):
             if isinstance(update, types.StreamEnded):
                 if update.stream_type == types.StreamEnded.Type.AUDIO:
                     chat_id = update.chat_id
-                    url, status = await db.get_stream(chat_id)
+                    url, status, stype = await db.get_stream(chat_id)
                     if status and url:
                         try:
-                            return await self.play_media(chat_id, None, stream_url=url)
+                            return await self.play_media(chat_id, None, stream_url=url, video=(stype == "video"))
                         except Exception as e:
                             logger.error(f"Failed to auto-restart stream in {chat_id}: {e}")
                     await self.play_next(chat_id)
@@ -269,9 +282,9 @@ class TgCall(PyTgCalls):
 
         # Auto-restart active streams
         active_streams = await db.get_active_streams()
-        for chat_id, url in active_streams:
+        for chat_id, url, stype in active_streams:
             try:
-                await self.play_media(chat_id, None, stream_url=url)
+                await self.play_media(chat_id, None, stream_url=url, video=(stype == "video"))
                 logger.info(f"Auto-restarted stream in {chat_id}")
             except Exception as e:
                 logger.error(f"Failed to auto-restart stream in {chat_id}: {e}")

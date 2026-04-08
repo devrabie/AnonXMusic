@@ -141,6 +141,8 @@ class Telegram:
                 msg_id = int(link.split("/")[-1])
             else:
                 chat = link.split("/")[-2]
+                if chat.isdigit():
+                    chat = int("-100" + chat)
                 msg_id = int(link.split("/")[-1])
         except (IndexError, ValueError):
             return None
