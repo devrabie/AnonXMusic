@@ -62,28 +62,39 @@ class TgCall(PyTgCalls):
                 video=False,
                 user="System"
             )
-        _thumb = (
-            await thumb.generate(media)
-            if isinstance(media, Track)
-            else config.DEFAULT_THUMB
-        ) if config.THUMB_GEN else None
+            _thumb = config.DEFAULT_THUMB if config.THUMB_GEN else None
+        else:
+            _thumb = (
+                await thumb.generate(media)
+                if isinstance(media, Track)
+                else config.DEFAULT_THUMB
+            ) if config.THUMB_GEN else None
 
         if not media.file_path:
             await message.edit_text(_lang["error_no_file"].format(config.SUPPORT_CHAT))
             return await self.play_next(chat_id)
 
-        stream = types.MediaStream(
-            media_path=media.file_path,
-            audio_parameters=types.AudioQuality.HIGH,
-            video_parameters=types.VideoQuality.HD_720p,
-            audio_flags=types.MediaStream.Flags.REQUIRED,
-            video_flags=(
-                types.MediaStream.Flags.AUTO_DETECT
-                if media.video
-                else types.MediaStream.Flags.IGNORE
-            ),
-            ffmpeg_parameters=f"-ss {seek_time}" if seek_time > 1 else None,
-        )
+        if stream_url:
+            stream = types.MediaStream(
+                media_path=stream_url,
+                audio_parameters=types.AudioQuality.HIGH,
+                video_parameters=types.VideoQuality.HD_720p,
+                audio_flags=types.MediaStream.Flags.REQUIRED,
+                video_flags=types.MediaStream.Flags.IGNORE,
+            )
+        else:
+            stream = types.MediaStream(
+                media_path=media.file_path,
+                audio_parameters=types.AudioQuality.HIGH,
+                video_parameters=types.VideoQuality.HD_720p,
+                audio_flags=types.MediaStream.Flags.REQUIRED,
+                video_flags=(
+                    types.MediaStream.Flags.AUTO_DETECT
+                    if media.video
+                    else types.MediaStream.Flags.IGNORE
+                ),
+                ffmpeg_parameters=f"-ss {seek_time}" if seek_time > 1 else None,
+            )
         try:
             await client.play(
                 chat_id=chat_id,

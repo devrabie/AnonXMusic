@@ -135,12 +135,15 @@ class Telegram:
         )
 
     async def get_from_link(self, link: str, sent: types.Message) -> Media | None:
-        if "t.me/c/" in link:
-            chat = int("-100" + link.split("/")[-2])
-            msg_id = int(link.split("/")[-1])
-        else:
-            chat = link.split("/")[-2]
-            msg_id = int(link.split("/")[-1])
+        try:
+            if "t.me/c/" in link:
+                chat = int("-100" + link.split("/")[-2])
+                msg_id = int(link.split("/")[-1])
+            else:
+                chat = link.split("/")[-2]
+                msg_id = int(link.split("/")[-1])
+        except (IndexError, ValueError):
+            return None
 
         try:
             msg = await app.get_messages(chat, msg_id)
