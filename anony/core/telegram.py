@@ -6,10 +6,11 @@
 import asyncio
 import os
 import time
+import re
 
 from pyrogram import types
 
-from anony import config
+from anony import app, config
 from anony.helpers import Media, buttons, utils
 
 
@@ -132,3 +133,19 @@ class Telegram:
             title="M3U8 Stream",
             video=video,
         )
+
+    async def get_from_link(self, link: str, sent: types.Message) -> Media | None:
+        if "t.me/c/" in link:
+            chat = int("-100" + link.split("/")[-2])
+            msg_id = int(link.split("/")[-1])
+        else:
+            chat = link.split("/")[-2]
+            msg_id = int(link.split("/")[-1])
+
+        try:
+            msg = await app.get_messages(chat, msg_id)
+            if not self.get_media(msg):
+                return None
+            return await self.download(msg, sent)
+        except Exception:
+            return None

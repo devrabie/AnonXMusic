@@ -45,6 +45,10 @@ async def play_hndlr(
         setattr(sent, "lang", m.lang)
         file = await tg.download(m.reply_to_message, sent)
 
+    elif url and ("t.me/" in url or "telegram.me/" in url):
+        setattr(sent, "lang", m.lang)
+        file = await tg.get_from_link(url, sent)
+
     elif m3u8:
         file = await tg.process_m3u8(url, sent.id, video)
 
