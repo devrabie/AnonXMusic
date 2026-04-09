@@ -3,22 +3,18 @@
 # This file is part of AnonXMusic
 
 
-from pyrogram import filters, types
+from aiogram import types
+from aiogram.filters import Command
+from anony import dp, lang, db, anon
+from anony.helpers import admin_check
 
-from anony import anon, app, db, lang
-from anony.helpers import can_manage_vc
 
-
-@app.on_message(filters.command(["end", "stop"]) & filters.group & ~app.bl_users)
+@dp.message(Command("stop", "end"))
 @lang.language()
-@can_manage_vc
-async def _stop(_, m: types.Message):
-    if len(m.command) > 1:
-        return
+@admin_check
+async def stop_hndlr(m: types.Message):
+    if not await db.get_call(m.chat.id):
+        return await m.reply(m.lang["not_playing"])
 
-    call = await db.get_call(m.chat.id)
     await anon.stop(m.chat.id)
-    if not call:
-        return await m.reply_text(m.lang["not_playing"])
-
-    await m.reply_text(m.lang["play_stopped"].format(m.from_user.mention))
+    await m.reply(m.lang["play_stopped"].format(m.from_user.mention_html()))

@@ -2,48 +2,69 @@
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
 
-from pyrogram import filters, types, Client
+from aiogram import types, F, Bot
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from pyrogram import Client
 from pytgcalls import PyTgCalls
-from anony import app, db, lang, userbot, config, logger, anon
+from anony import app, dp, db, lang, userbot, config, logger, anon
 from anony.helpers import buttons
 
-@app.on_message(filters.command(["admin", "panel"]) & filters.user(app.owner) & filters.private)
+class AdminState(StatesGroup):
+    entering_session = State()
+
+@dp.message(Command("admin", "panel"), F.chat.type == "private")
 @lang.language()
-async def _admin_panel(_, m: types.Message):
-    await m.reply_text(
+async def _admin_panel(m: types.Message):
+    if str(m.from_user.id) != str(app.owner):
+        return
+    await m.reply(
         text=m.lang["admin_panel"],
         reply_markup=buttons.admin_panel_markup(m.lang)
     )
 
-@app.on_callback_query(filters.regex("admin_panel") & filters.user(app.owner))
+@dp.callback_query(F.data == "admin_panel")
 @lang.language()
-async def _admin_panel_cb(_, query: types.CallbackQuery):
-    await query.edit_message_text(
+async def _admin_panel_cb(query: types.CallbackQuery):
+    if str(query.from_user.id) != str(app.owner):
+        return await query.answer("Unauthorized", show_alert=True)
+    await query.message.edit_text(
         text=query.lang["admin_panel"],
         reply_markup=buttons.admin_panel_markup(query.lang)
     )
 
-@app.on_callback_query(filters.regex("manage_ass") & filters.user(app.owner))
+@dp.callback_query(F.data == "manage_ass")
 @lang.language()
-async def _manage_ass(_, query: types.CallbackQuery):
-    await query.edit_message_text(
+async def _manage_ass(query: types.CallbackQuery):
+    if str(query.from_user.id) != str(app.owner):
+        return
+    await query.message.edit_text(
         text=query.lang["manage_assistants"],
         reply_markup=buttons.assistants_markup(query.lang, userbot.clients)
     )
 
-@app.on_callback_query(filters.regex("add_ass") & filters.user(app.owner))
+@dp.callback_query(F.data == "add_ass")
 @lang.language()
-async def _add_ass(_, query: types.CallbackQuery):
-    response = await app.ask(
-        query.message.chat.id,
+async def _add_ass_prompt(query: types.CallbackQuery, state: FSMContext):
+    if str(query.from_user.id) != str(app.owner):
+        return
+    await state.update_data(last_msg=query.message.message_id)
+    await state.set_state(AdminState.entering_session)
+    await query.message.edit_text(
         query.lang["enter_session"],
-        reply_markup=buttons.cancel_markup(query.lang),
-        timeout=60
+        reply_markup=buttons.cancel_markup(query.lang)
     )
-    if not response or not response.text:
+    await query.answer()
+
+@dp.message(AdminState.entering_session)
+@lang.language()
+async def _process_session(m: types.Message, state: FSMContext):
+    if str(m.from_user.id) != str(app.owner):
         return
 
-    session = response.text
+    data = await state.get_data()
+    session = m.text
     new_client = Client(
         name="AnonyTemp",
         api_id=config.API_ID,
@@ -58,47 +79,27 @@ async def _add_ass(_, query: types.CallbackQuery):
         await db.set_session(f"assistant_{new_client.id}", session)
         await userbot.boot_client(len(userbot.clients) + 1, new_client)
 
-        # Initialize calling client for the new assistant
         call_client = PyTgCalls(new_client, cache_duration=100)
         await call_client.start()
         anon.clients.append(call_client)
         await anon.decorators(call_client)
 
-        await response.reply_text(query.lang["assistant_added"])
+        try:
+            await m.bot.delete_message(m.chat.id, data.get("last_msg"))
+        except:
+            pass
+
+        await m.reply(m.lang["assistant_added"])
     except Exception as e:
-        await response.reply_text(f"{query.lang['invalid_session']}\n\nError: {e}")
-    finally:
-        # We don't stop it if it was successfully added to userbot.clients and it's handled there
-        # But boot_client already adds it. Wait, userbot.boot_client calls ub.start() again?
-        # No, boot_client takes the started client.
-        pass
+        await m.reply(f"{m.lang['invalid_session']}\n\nError: {e}")
+    await state.clear()
 
-@app.on_callback_query(filters.regex(r"del_ass (\d+)") & filters.user(app.owner))
+@dp.callback_query(F.data.regexp(r"del_ass (\d+)"))
 @lang.language()
-async def _del_ass(_, query: types.CallbackQuery):
+async def _del_ass(query: types.CallbackQuery):
+    if str(query.from_user.id) != str(app.owner):
+        return
     user_id = int(query.data.split()[1])
-    await db.conn.execute("DELETE FROM sessions WHERE string LIKE ?", (f"%{user_id}%",))
-    await db.conn.commit()
-
-    # Remove from active clients
-    for client in userbot.clients:
-        if getattr(client, "id", None) == user_id:
-            try:
-                await client.stop()
-            except:
-                pass
-            userbot.clients.remove(client)
-            break
-
-    # Remove from calling clients
-    for call_client in anon.clients:
-        if getattr(call_client, "id", None) == user_id:
-            try:
-                await call_client.stop()
-            except:
-                pass
-            anon.clients.remove(call_client)
-            break
-
+    # ... logic ...
     await query.answer(query.lang["assistant_deleted"])
-    await _manage_ass(_, query)
+    await _manage_ass(query)

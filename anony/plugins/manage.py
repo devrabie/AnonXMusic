@@ -2,16 +2,26 @@
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
 
-from pyrogram import enums, filters, types
-from anony import app, db, lang, anon, tg, queue
+import asyncio
+from aiogram import types, F, enums
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+
+from anony import app, dp, db, lang, anon, tg, queue
 from anony.helpers import buttons
 
-@app.on_message(filters.command(["manage", "dashboard"]) & filters.private)
+class ManageChat(StatesGroup):
+    entering_url = State()
+    entering_chat_id = State()
+    entering_tg_link = State()
+
+@dp.message(Command("manage", "dashboard"), F.chat.type == enums.ChatType.PRIVATE)
 @lang.language()
-async def _dashboard(_, m: types.Message):
+async def _dashboard(m: types.Message):
     chats = await db.get_chats(user_id=m.from_user.id)
     if not chats:
-        return await m.reply_text(
+        return await m.reply(
             text=m.lang["no_chats"],
             reply_markup=buttons.dashboard_markup(m.lang, [])
         )
@@ -24,17 +34,17 @@ async def _dashboard(_, m: types.Message):
         except Exception:
             continue
 
-    await m.reply_text(
+    await m.reply(
         text=m.lang["manage_chats"],
         reply_markup=buttons.dashboard_markup(m.lang, chat_list)
     )
 
-@app.on_callback_query(filters.regex("manage_chats"))
+@dp.callback_query(F.data == "manage_chats")
 @lang.language()
-async def _manage_chats_cb(_, query: types.CallbackQuery):
+async def _manage_chats_cb(query: types.CallbackQuery):
     chats = await db.get_chats(user_id=query.from_user.id)
     if not chats:
-        return await query.edit_message_text(
+        return await query.message.edit_text(
             text=query.lang["no_chats"],
             reply_markup=buttons.dashboard_markup(query.lang, [])
         )
@@ -47,14 +57,14 @@ async def _manage_chats_cb(_, query: types.CallbackQuery):
         except Exception:
             continue
 
-    await query.edit_message_text(
+    await query.message.edit_text(
         text=query.lang["manage_chats"],
         reply_markup=buttons.dashboard_markup(query.lang, chat_list)
     )
 
-@app.on_callback_query(filters.regex(r"manage_chat (-?\d+)"))
+@dp.callback_query(F.data.regexp(r"manage_chat (-?\d+)"))
 @lang.language()
-async def _manage_chat(_, query: types.CallbackQuery):
+async def _manage_chat(query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
     url, status, stype, source = await db.get_stream(chat_id)
 
@@ -66,185 +76,81 @@ async def _manage_chat(_, query: types.CallbackQuery):
     else:
         keyboard = buttons.stream_markup(query.lang, chat_id, status, stype, source)
 
-    await query.edit_message_text(
+    await query.message.edit_text(
         text=query.lang["stream_settings"].format(chat_id),
         reply_markup=keyboard
     )
 
-@app.on_callback_query(filters.regex(r"toggle_stype (-?\d+)"))
+@dp.callback_query(F.data.regexp(r"toggle_stype (-?\d+)"))
 @lang.language()
-async def _toggle_stype(_, query: types.CallbackQuery):
+async def _toggle_stype(query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
     url, status, stype, source = await db.get_stream(chat_id)
 
     new_type = "video" if stype == "audio" else "audio"
     await db.set_stream(chat_id, stype=new_type)
-    await _manage_chat(_, query)
+    await _manage_chat(query)
 
-@app.on_callback_query(filters.regex(r"toggle_source (-?\d+)"))
+@dp.callback_query(F.data.regexp(r"set_url (-?\d+)"))
 @lang.language()
-async def _toggle_source(_, query: types.CallbackQuery):
+async def _set_url_prompt(query: types.CallbackQuery, state: FSMContext):
     chat_id = int(query.data.split()[1])
-    url, status, stype, source = await db.get_stream(chat_id)
-
-    new_source = "playlist" if source == "url" else "url"
-    await db.set_stream(chat_id, source=new_source)
-    await _manage_chat(_, query)
-
-@app.on_callback_query(filters.regex(r"toggle_stream (-?\d+)"))
-@lang.language()
-async def _toggle_stream(_, query: types.CallbackQuery):
-    chat_id = int(query.data.split()[1])
-    url, status, stype, source = await db.get_stream(chat_id)
-
-    if not url:
-        return await query.answer(query.lang["enter_url"], show_alert=True)
-
-    new_status = not status
-    await db.set_stream(chat_id, status=new_status)
-
-    if new_status:
-        if source == "url":
-            if not url:
-                return await query.answer(query.lang["enter_url"], show_alert=True)
-            await anon.play_media(chat_id, None, stream_url=url, video=(stype == "video"))
-        else:
-            await anon.play_next(chat_id)
-        await query.answer(query.lang["stream_on"])
-    else:
-        await anon.stop(chat_id)
-        await query.answer(query.lang["stream_off"])
-
-    await _manage_chat(_, query)
-
-@app.on_callback_query(filters.regex(r"set_url (-?\d+)"))
-@lang.language()
-async def _set_url(_, query: types.CallbackQuery):
-    chat_id = int(query.data.split()[1])
-    response = await app.ask(
-        query.message.chat.id,
+    await state.update_data(chat_id=chat_id, last_msg=query.message.message_id)
+    await state.set_state(ManageChat.entering_url)
+    await query.message.edit_text(
         query.lang["enter_url"],
-        reply_markup=buttons.cancel_markup(query.lang),
-        timeout=60
+        reply_markup=buttons.cancel_markup(query.lang)
     )
-    if not response or not response.text:
-        return
+    await query.answer()
 
-    url = response.text
-    await db.set_stream(chat_id, url=url)
-    await response.reply_text(query.lang["url_set"])
-
-    # Refresh dashboard
-    m = await app.send_message(query.message.chat.id, query.lang["processing"])
-    query.message = m
-    await _manage_chat(_, query)
-
-@app.on_callback_query(filters.regex("add_chat_manual"))
+@dp.message(ManageChat.entering_url)
 @lang.language()
-async def _add_chat_manual(_, query: types.CallbackQuery):
-    response = await app.ask(
-        query.message.chat.id,
-        query.lang["enter_chat_id"],
-        reply_markup=buttons.cancel_markup(query.lang),
-        timeout=60
-    )
-    if not response or not response.text:
-        return
+async def _process_url(m: types.Message, state: FSMContext):
+    data = await state.get_data()
+    chat_id = data.get("chat_id")
+    url = m.text
+    await db.set_stream(chat_id, url=url)
 
+    # Clean up previous messages
     try:
-        chat_id = response.text.strip()
-        if "t.me/" in chat_id or "telegram.me/" in chat_id:
-            if "/c/" in chat_id:
-                chat_id = int("-100" + chat_id.split("/")[-2])
-            else:
-                chat_id = [p for p in chat_id.split("/") if p][-1]
+        await m.bot.delete_message(m.chat.id, data.get("last_msg"))
+    except:
+        pass
 
-        if isinstance(chat_id, str) and chat_id.startswith("-100"):
-            try:
-                chat_id = int(chat_id)
-            except ValueError:
-                pass
-        elif isinstance(chat_id, str) and chat_id.replace("-", "").isdigit():
-            chat_id = int(chat_id) if chat_id.startswith("-") else int("-100" + chat_id)
+    await m.reply(m.lang["url_set"])
+    await state.clear()
 
-        # Try to resolve peer to avoid PeerIdInvalid
-        try:
-            await app.resolve_peer(chat_id)
-        except Exception:
-            pass
+@dp.callback_query(F.data == "add_chat_manual")
+@lang.language()
+async def _add_chat_manual_prompt(query: types.CallbackQuery, state: FSMContext):
+    await state.update_data(last_msg=query.message.message_id)
+    await state.set_state(ManageChat.entering_chat_id)
+    await query.message.edit_text(
+        query.lang["enter_chat_id"],
+        reply_markup=buttons.cancel_markup(query.lang)
+    )
+    await query.answer()
+
+@dp.message(ManageChat.entering_chat_id)
+@lang.language()
+async def _process_chat_id(m: types.Message, state: FSMContext):
+    data = await state.get_data()
+    chat_input = m.text.strip()
+    try:
+        if chat_input.startswith("-100"):
+            chat_id = int(chat_input)
+        else:
+            chat_id = chat_input
 
         chat = await app.get_chat(chat_id)
-        await db.add_chat(chat.id, query.from_user.id)
-        await response.reply_text(query.lang["chat_added"].format(chat.title))
-        await _manage_chats_cb(_, query)
+        await db.add_chat(chat.id, m.from_user.id)
+
+        try:
+            await m.bot.delete_message(m.chat.id, data.get("last_msg"))
+        except:
+            pass
+
+        await m.reply(m.lang["chat_added"].format(chat.title))
     except Exception as e:
-        await response.reply_text(f"{query.lang['invalid_chat_id']}\n\nError: {e}")
-
-@app.on_callback_query(filters.regex(r"add_local (-?\d+)"))
-@lang.language()
-async def _add_local(_, query: types.CallbackQuery):
-    chat_id = int(query.data.split()[1])
-    response = await app.ask(
-        query.message.chat.id,
-        query.lang["enter_telegram_link"],
-        reply_markup=buttons.cancel_markup(query.lang),
-        timeout=60
-    )
-    if not response or not response.text:
-        return
-
-    link = response.text
-    sent = await response.reply_text(query.lang["processing"])
-
-    try:
-        media = await tg.get_from_link(link, sent)
-        if not media:
-            return await sent.edit_text(query.lang["invalid_telegram_link"])
-
-        media.user = query.from_user.mention
-        position = queue.add(chat_id, media)
-
-        if position != 0 or await db.get_call(chat_id):
-            await sent.edit_text(
-                query.lang["play_queued"].format(
-                    position,
-                    media.url,
-                    media.title,
-                    media.duration,
-                    query.from_user.mention,
-                )
-            )
-        else:
-            await anon.play_media(chat_id, sent, media)
-
-    except Exception as e:
-        await sent.edit_text(f"Error: {e}")
-
-    # Refresh dashboard after a delay
-    await _manage_chat(_, query)
-
-@app.on_callback_query(filters.regex(r"play_target (-?\d+) (.*)"))
-@lang.language()
-async def _play_target_cb(_, query: types.CallbackQuery):
-    from anony.plugins.play import play_hndlr
-    from types import SimpleNamespace
-    import asyncio
-
-    data = query.data.split(maxsplit=2)
-    chat_id = int(data[1])
-    command = data[2]
-
-    # Spoof message to trigger play handler in target chat
-    m = SimpleNamespace(
-        chat=SimpleNamespace(id=chat_id, type=enums.ChatType.SUPERGROUP),
-        text=command,
-        command=command.split(),
-        from_user=query.from_user,
-        reply_to_message=None,
-        reply_text=lambda *args, **kwargs: app.send_message(chat_id, *args, **kwargs),
-        delete=lambda *args, **kwargs: asyncio.sleep(0),
-        lang=query.lang
-    )
-
-    await query.message.delete()
-    await play_hndlr(_, m)
+        await m.reply(f"Error: {e}")
+    await state.clear()

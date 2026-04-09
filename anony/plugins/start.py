@@ -3,30 +3,30 @@
 # This file is part of AnonXMusic
 
 import asyncio
-from pyrogram import enums, filters, types
+from aiogram import types, F, enums
+from aiogram.filters import Command
 
-from anony import app, config, db, lang, userbot
+from anony import app, dp, config, db, lang, userbot
 from anony.helpers import buttons, utils
 
 
-@app.on_message(filters.command(["help"]) & filters.private & ~app.bl_users)
+@dp.message(Command("help"), F.chat.type == enums.ChatType.PRIVATE)
 @lang.language()
-async def _help(_, m: types.Message):
-    await m.reply_text(
+async def _help(m: types.Message):
+    await m.reply(
         text=m.lang["help_menu"],
         reply_markup=buttons.help_markup(m.lang),
-        quote=True,
     )
 
 
-@app.on_message(filters.command(["start"]))
+@dp.message(Command("start"))
 @lang.language()
-async def start(_, message: types.Message):
-    if message.from_user.id in app.bl_users and message.from_user.id not in db.notified:
-        return await message.reply_text(message.lang["bl_user_notify"])
+async def start(message: types.Message):
+    # Blacklist check is already in decorator
 
-    if len(message.command) > 1 and message.command[1] == "help":
-        return await _help(_, message)
+    command = message.text.split()
+    if len(command) > 1 and command[1] == "help":
+        return await _help(message)
 
     private = message.chat.type == enums.ChatType.PRIVATE
     _text = (
@@ -36,10 +36,9 @@ async def start(_, message: types.Message):
     )
 
     key = buttons.start_key(message.lang, private, message.from_user.id)
-    await message.reply_text(
+    await message.reply(
         text=_text,
         reply_markup=key,
-        quote=not private,
     )
 
     if private:
@@ -53,55 +52,51 @@ async def start(_, message: types.Message):
             await db.add_chat(message.chat.id, message.from_user.id)
 
 
-@app.on_message(filters.command(["playmode", "settings"]) & filters.group & ~app.bl_users)
+@dp.message(Command("playmode", "settings"), F.chat.type.in_([enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]))
 @lang.language()
-async def settings(_, message: types.Message):
+async def settings(message: types.Message):
     admin_only = await db.get_play_mode(message.chat.id)
     cmd_delete = await db.get_cmd_delete(message.chat.id)
     _language = await db.get_lang(message.chat.id)
-    await message.reply_text(
+    await message.reply(
         text=message.lang["start_settings"].format(message.chat.title),
         reply_markup=buttons.settings_markup(
             message.lang, admin_only, cmd_delete, _language, message.chat.id
         ),
-        quote=True,
     )
 
-
-@app.on_chat_member_updated()
+# Aiogram 3 uses ChatMemberUpdated for both bot joining and member updates
+@dp.my_chat_member()
 @lang.language()
-async def _member_update(_, update: types.ChatMemberUpdated):
-    if not update.new_chat_member:
-        return
+async def _bot_member_update(update: types.ChatMemberUpdated):
+    if update.new_chat_member.status == enums.ChatMemberStatus.ADMINISTRATOR:
+        if not await db.is_chat(update.chat.id):
+            user_id = update.from_user.id if update.from_user else None
+            await db.add_chat(update.chat.id, user_id)
+            await update.bot.send_message(
+                update.chat.id,
+                update.lang["chat_added"].format(update.chat.title)
+            )
 
-    if update.new_chat_member.user.id == app.id:
-        if update.new_chat_member.status == enums.ChatMemberStatus.ADMINISTRATOR:
-            if not await db.is_chat(update.chat.id):
-                user_id = update.from_user.id if update.from_user else None
-                await db.add_chat(update.chat.id, user_id)
-                await app.send_message(
-                    update.chat.id,
-                    update.lang["chat_added"].format(update.chat.title)
-                )
+        # Assistant join logic
+        try:
+            client = await db.get_assistant(update.chat.id)
+            if client:
+                try:
+                    await client.get_chat_member(update.chat.id, client.id)
+                except Exception:
+                    chat = await update.bot.get_chat(update.chat.id)
+                    if chat.username:
+                        invite_link = chat.username
+                    else:
+                        invite_link = chat.invite_link or await update.bot.export_chat_invite_link(update.chat.id)
+                    await client.join_chat(invite_link)
+        except Exception:
+            pass
 
-            # Assistant join logic
-            try:
-                client = await db.get_assistant(update.chat.id)
-                if client:
-                    try:
-                        await client.get_chat_member(update.chat.id, client.id)
-                    except Exception:
-                        if update.chat.username:
-                            invite_link = update.chat.username
-                        else:
-                            invite_link = await app.export_chat_invite_link(update.chat.id)
-                        await client.join_chat(invite_link)
-            except Exception:
-                pass
-
-@app.on_message(filters.new_chat_members, group=7)
+@dp.message(F.new_chat_members)
 @lang.language()
-async def _new_member(_, message: types.Message):
+async def _new_member(message: types.Message):
     await asyncio.sleep(3)
     for member in message.new_chat_members:
         if member.id == app.id:
@@ -109,4 +104,4 @@ async def _new_member(_, message: types.Message):
                 user_id = message.from_user.id if message.from_user else None
                 await utils.send_log(message, True)
                 await db.add_chat(message.chat.id, user_id)
-            await message.reply_text(message.lang["promote_me"])
+            await message.reply(message.lang["promote_me"])

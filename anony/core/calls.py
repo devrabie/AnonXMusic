@@ -6,7 +6,6 @@
 from ntgcalls import (ConnectionNotFound, TelegramServerError,
                       RTMPStreamingUnsupported, ConnectionError)
 from pyrogram import errors, types as pytypes
-from pyrogram.types import InputMediaPhoto, Message
 from pytgcalls import PyTgCalls, exceptions, types
 from pytgcalls.pytgcalls_session import PyTgCallsSession
 
@@ -44,7 +43,7 @@ class TgCall(PyTgCalls):
     async def play_media(
         self,
         chat_id: int,
-        message: Message,
+        message: any, # Can be aiogram message or None
         media: Media | Track = None,
         seek_time: int = 0,
         stream_url: str = None,
@@ -75,14 +74,15 @@ class TgCall(PyTgCalls):
         # Ensure assistant is in chat and promoted
         try:
             member = await app.get_chat_member(chat_id, assistant_id)
-            if member.status not in [pytypes.ChatMemberStatus.ADMINISTRATOR, pytypes.ChatMemberStatus.OWNER]:
+            # member here is aiogram member
+            from aiogram.enums import ChatMemberStatus
+            if member.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]:
                 try:
+                    # Promote via aiogram app
                     await app.promote_chat_member(
-                        chat_id, assistant_id,
-                        privileges=pytypes.ChatPrivileges(
-                            can_manage_video_chats=True,
-                            can_invite_users=True,
-                        )
+                        chat_id=chat_id, user_id=assistant_id,
+                        can_manage_video_chats=True,
+                        can_invite_users=True,
                     )
                 except Exception:
                     pass
@@ -92,7 +92,7 @@ class TgCall(PyTgCalls):
                 if chat.username:
                     invite_link = chat.username
                 else:
-                    invite_link = await app.export_chat_invite_link(chat_id)
+                    invite_link = chat.invite_link or await app.export_chat_invite_link(chat_id)
 
                 try:
                     await ub.join_chat(invite_link)
@@ -101,11 +101,9 @@ class TgCall(PyTgCalls):
                     await ub.join_chat(invite_link)
 
                 await app.promote_chat_member(
-                    chat_id, assistant_id,
-                    privileges=pytypes.ChatPrivileges(
-                        can_manage_video_chats=True,
-                        can_invite_users=True,
-                    )
+                    chat_id=chat_id, user_id=assistant_id,
+                    can_manage_video_chats=True,
+                    can_invite_users=True,
                 )
             except Exception as e:
                 logger.error(f"Assistant failed to join/promote in {chat_id}: {e}")
@@ -180,9 +178,11 @@ class TgCall(PyTgCalls):
                     return
                 try:
                     if _thumb:
+                        from aiogram.types import InputMediaPhoto, FSInputFile
+                        # Aiogram edit_media needs different approach
                         await message.edit_media(
                             media=InputMediaPhoto(
-                                media=_thumb,
+                                media=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
                                 caption=text,
                             ),
                             reply_markup=keyboard,
@@ -191,9 +191,10 @@ class TgCall(PyTgCalls):
                         await message.edit_text(text, reply_markup=keyboard)
                 except Exception:
                     if _thumb:
+                        from aiogram.types import FSInputFile
                         sent = await app.send_photo(
                             chat_id=chat_id,
-                            photo=_thumb,
+                            photo=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
                             caption=text,
                             reply_markup=keyboard,
                         )
@@ -203,7 +204,7 @@ class TgCall(PyTgCalls):
                             text=text,
                             reply_markup=keyboard,
                         )
-                    media.message_id = sent.id
+                    media.message_id = sent.message_id
         except FileNotFoundError:
             if message:
                 await message.edit_text(_lang["error_no_file"].format(config.SUPPORT_CHAT))
@@ -233,7 +234,7 @@ class TgCall(PyTgCalls):
         media = queue.get_current(chat_id)
         _lang = await lang.get_lang(chat_id)
         msg = await app.send_message(chat_id=chat_id, text=_lang["play_again"])
-        media.message_id = msg.id
+        media.message_id = msg.message_id
         await self.play_media(chat_id, msg, media)
 
 
@@ -245,10 +246,9 @@ class TgCall(PyTgCalls):
         media = queue.get_next(chat_id)
         try:
             if media.message_id:
-                await app.delete_messages(
+                await app.delete_message(
                     chat_id=chat_id,
-                    message_ids=media.message_id,
-                    revoke=True,
+                    message_id=media.message_id,
                 )
                 media.message_id = 0
         except Exception:
@@ -267,12 +267,13 @@ class TgCall(PyTgCalls):
                     _lang["error_no_file"].format(config.SUPPORT_CHAT)
                 )
 
-        media.message_id = msg.id
+        media.message_id = msg.message_id
         await self.play_media(chat_id, msg, media)
 
 
     async def ping(self) -> float:
-        pings = [client.ping for client in self.clients]
+        pings = [client.ping for client in self.clients if hasattr(client, 'ping')]
+        if not pings: return 0.0
         return round(sum(pings) / len(pings), 2)
 
 

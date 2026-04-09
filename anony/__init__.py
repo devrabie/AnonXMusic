@@ -8,6 +8,8 @@ import asyncio
 import logging
 import pyrogram.errors
 from logging.handlers import RotatingFileHandler
+from aiogram import Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 
 # Monkeypatch for compatibility with pytgcalls and different pyrogram versions
 if not hasattr(pyrogram.errors, "GroupcallForbidden"):
@@ -28,6 +30,7 @@ logging.getLogger("httpx").setLevel(logging.ERROR)
 logging.getLogger("ntgcalls").setLevel(logging.CRITICAL)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 logging.getLogger("pytgcalls").setLevel(logging.ERROR)
+logging.getLogger("aiogram").setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +45,7 @@ boot = time.time()
 
 from anony.core.bot import Bot
 app = Bot()
+dp = Dispatcher(storage=MemoryStorage())
 
 from anony.core.dir import ensure_dirs
 ensure_dirs()

@@ -3,57 +3,45 @@
 # This file is part of AnonXMusic
 
 
-import pyrogram
-from pyromod import listen
+import logging
+from aiogram import Bot as AiogramBot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode, ChatMemberStatus
 
 from anony import config, logger
 
 
-class Bot(pyrogram.Client):
+class Bot(AiogramBot):
     def __init__(self):
         super().__init__(
-            name="Anony",
-            api_id=config.API_ID,
-            api_hash=config.API_HASH,
-            bot_token=config.BOT_TOKEN,
-            parse_mode=pyrogram.enums.ParseMode.HTML,
-            max_concurrent_transmissions=7,
-            in_memory=True,
+            token=config.BOT_TOKEN,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
         self.owner = config.OWNER_ID
-        self.logger = config.LOGGER_ID
-        self.bl_users = pyrogram.filters.user()
-        self.sudoers = pyrogram.filters.user(self.owner)
+        self.logger_id = config.LOGGER_ID
 
     async def boot(self):
         """
         Starts the bot and performs initial setup.
-
-        Raises:
-            SystemExit: If the bot fails to access the log group or is not an administrator in the logger group.
         """
-        await super().start()
+        self.me = await self.get_me()
         self.id = self.me.id
         self.name = self.me.first_name
         self.username = self.me.username
-        self.mention = self.me.mention
+        self.mention = f"@{self.username}"
 
         try:
-            try:
-                await self.resolve_peer(self.logger)
-            except Exception:
-                pass
-            await self.send_message(self.logger, "Bot Started")
-            get = await self.get_chat_member(self.logger, self.id)
-            if get.status != pyrogram.enums.ChatMemberStatus.ADMINISTRATOR:
+            await self.send_message(self.logger_id, "Bot Started")
+            get = await self.get_chat_member(self.logger_id, self.id)
+            if get.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]:
                 logger.warning("Please promote the bot as an admin in logger group.")
         except Exception as ex:
-            logger.warning(f"Bot has failed to access the log group: {self.logger}\nReason: {ex}")
+            logger.warning(f"Bot has failed to access the log group: {self.logger_id}\nReason: {ex}")
         logger.info(f"Bot started as @{self.username}")
 
     async def exit(self):
         """
         Asynchronously stops the bot.
         """
-        await super().stop()
+        await self.session.close()
         logger.info("Bot stopped.")
