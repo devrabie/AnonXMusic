@@ -11,7 +11,7 @@ from anony import app, db
 
 def admin_check(func):
     @wraps(func)
-    async def wrapper(update: types.Message | types.CallbackQuery, lang: dict, *args, **kwargs):
+    async def wrapper(update: types.Message | types.CallbackQuery, *args, **kwargs):
         async def reply(text):
             if isinstance(update, types.Message):
                 return await update.reply(text)
@@ -24,13 +24,14 @@ def admin_check(func):
             else update.message.chat
         )
         if chat.type == enums.ChatType.PRIVATE:
-            return await func(update, lang, *args, **kwargs)
+            return await func(update, *args, **kwargs)
 
         user_id = update.from_user.id
         admins = await db.get_admins(chat.id)
 
-        if user_id == int(app.owner):
-            return await func(update, lang, *args, **kwargs)
+        # check if owner or sudo
+        if user_id in app.sudoers:
+            return await func(update, *args, **kwargs)
 
         if user_id not in admins:
             if not admins:
@@ -38,16 +39,16 @@ def admin_check(func):
                 await db.set_admins(chat.id, admins)
 
             if user_id not in admins:
-                return await reply(lang["user_no_perms"])
+                return await reply(update.lang["user_no_perms"])
 
-        return await func(update, lang, *args, **kwargs)
+        return await func(update, *args, **kwargs)
 
     return wrapper
 
 
 def can_manage_vc(func):
     @wraps(func)
-    async def wrapper(update: types.Message | types.CallbackQuery, lang: dict, *args, **kwargs):
+    async def wrapper(update: types.Message | types.CallbackQuery, *args, **kwargs):
         chat_id = (
             update.chat.id
             if isinstance(update, types.Message)
@@ -55,25 +56,27 @@ def can_manage_vc(func):
         )
         user_id = update.from_user.id
 
-        if user_id == int(app.owner):
-            return await func(update, lang, *args, **kwargs)
+        if user_id in app.sudoers:
+            return await func(update, *args, **kwargs)
 
         if await db.is_auth(chat_id, user_id):
-            return await func(update, lang, *args, **kwargs)
+            return await func(update, *args, **kwargs)
 
         admins = await db.get_admins(chat_id)
         if user_id in admins:
-            return await func(update, lang, *args, **kwargs)
+            return await func(update, *args, **kwargs)
 
         if isinstance(update, types.Message):
-            return await update.reply(lang["user_no_perms"])
+            return await update.reply(update.lang["user_no_perms"])
         else:
-            return await update.answer(lang["user_no_perms"], show_alert=True)
+            return await update.answer(update.lang["user_no_perms"], show_alert=True)
 
     return wrapper
 
 
 async def is_admin(chat_id: int, user_id: int) -> bool:
+    if user_id in app.sudoers:
+        return True
     if user_id in await db.get_admins(chat_id):
         return True
     try:
