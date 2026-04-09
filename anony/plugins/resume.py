@@ -3,20 +3,18 @@
 # This file is part of AnonXMusic
 
 
-from aiogram import types
+from aiogram import types, F
 from aiogram.filters import Command
-from anony import dp, lang, db, anon
-from anony.helpers import admin_check
+from anony import dp, db, app
 
 
 @dp.message(Command("resume"))
-@lang.language()
 @admin_check
-async def resume_hndlr(m: types.Message):
+async def resume_hndlr(m: types.Message, lang: dict):
     if not await db.get_call(m.chat.id):
-        return await m.reply(m.lang["not_playing"])
+        return await m.reply(lang["not_playing"])
     if not await db.is_paused(m.chat.id):
-        return await m.reply(m.lang["play_not_paused"])
+        return await m.reply(lang["play_not_paused"])
 
     await anon.resume(m.chat.id)
-    await m.reply(m.lang["play_resumed"].format(m.from_user.mention_html()))
+    await m.reply(lang["play_resumed"].format(m.from_user.mention_html()))

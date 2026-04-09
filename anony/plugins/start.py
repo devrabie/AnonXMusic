@@ -6,36 +6,32 @@ import asyncio
 from aiogram import types, F, enums
 from aiogram.filters import Command
 
-from anony import app, dp, config, db, lang, userbot
+from anony import app, dp, config, db, userbot
 from anony.helpers import buttons, utils
 
 
 @dp.message(Command("help"), F.chat.type == enums.ChatType.PRIVATE)
-@lang.language()
-async def _help(m: types.Message):
+async def _help(m: types.Message, lang: dict):
     await m.reply(
-        text=m.lang["help_menu"],
-        reply_markup=buttons.help_markup(m.lang),
+        text=lang["help_menu"],
+        reply_markup=buttons.help_markup(lang),
     )
 
 
 @dp.message(Command("start"))
-@lang.language()
-async def start(message: types.Message):
-    # Blacklist check is already in decorator
-
+async def start(message: types.Message, lang: dict):
     command = message.text.split()
     if len(command) > 1 and command[1] == "help":
-        return await _help(message)
+        return await _help(message, lang)
 
     private = message.chat.type == enums.ChatType.PRIVATE
     _text = (
-        message.lang["start_pm"].format(message.from_user.first_name, app.name)
+        lang["start_pm"].format(message.from_user.first_name, app.name)
         if private
-        else message.lang["start_gp"].format(app.name)
+        else lang["start_gp"].format(app.name)
     )
 
-    key = buttons.start_key(message.lang, private, message.from_user.id)
+    key = buttons.start_key(lang, private, message.from_user.id)
     await message.reply(
         text=_text,
         reply_markup=key,
@@ -53,29 +49,26 @@ async def start(message: types.Message):
 
 
 @dp.message(Command("playmode", "settings"), F.chat.type.in_([enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]))
-@lang.language()
-async def settings(message: types.Message):
+async def settings(message: types.Message, lang: dict):
     admin_only = await db.get_play_mode(message.chat.id)
     cmd_delete = await db.get_cmd_delete(message.chat.id)
     _language = await db.get_lang(message.chat.id)
     await message.reply(
-        text=message.lang["start_settings"].format(message.chat.title),
+        text=lang["start_settings"].format(message.chat.title),
         reply_markup=buttons.settings_markup(
-            message.lang, admin_only, cmd_delete, _language, message.chat.id
+            lang, admin_only, cmd_delete, _language, message.chat.id
         ),
     )
 
-# Aiogram 3 uses ChatMemberUpdated for both bot joining and member updates
 @dp.my_chat_member()
-@lang.language()
-async def _bot_member_update(update: types.ChatMemberUpdated):
+async def _bot_member_update(update: types.ChatMemberUpdated, lang: dict):
     if update.new_chat_member.status == enums.ChatMemberStatus.ADMINISTRATOR:
         if not await db.is_chat(update.chat.id):
             user_id = update.from_user.id if update.from_user else None
             await db.add_chat(update.chat.id, user_id)
             await update.bot.send_message(
                 update.chat.id,
-                update.lang["chat_added"].format(update.chat.title)
+                lang["chat_added"].format(update.chat.title)
             )
 
         # Assistant join logic
@@ -95,8 +88,7 @@ async def _bot_member_update(update: types.ChatMemberUpdated):
             pass
 
 @dp.message(F.new_chat_members)
-@lang.language()
-async def _new_member(message: types.Message):
+async def _new_member(message: types.Message, lang: dict):
     await asyncio.sleep(3)
     for member in message.new_chat_members:
         if member.id == app.id:
@@ -104,4 +96,4 @@ async def _new_member(message: types.Message):
                 user_id = message.from_user.id if message.from_user else None
                 await utils.send_log(message, True)
                 await db.add_chat(message.chat.id, user_id)
-            await message.reply(message.lang["promote_me"])
+            await message.reply(lang["promote_me"])

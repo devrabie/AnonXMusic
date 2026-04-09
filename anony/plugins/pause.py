@@ -5,62 +5,55 @@
 
 from aiogram import types, F
 from aiogram.filters import Command
-from anony import dp, db, lang, anon, queue
-from anony.helpers import admin_check, buttons
+from anony import dp, db, anon, queue
+from anony.helpers import admin_check
 
 
 @dp.message(Command("pause"))
-@lang.language()
 @admin_check
-async def pause_hndlr(m: types.Message):
+async def pause_hndlr(m: types.Message, lang: dict):
     if not await db.get_call(m.chat.id):
-        return await m.reply(m.lang["not_playing"])
+        return await m.reply(lang["not_playing"])
     if await db.is_paused(m.chat.id):
-        return await m.reply(m.lang["play_already_paused"])
+        return await m.reply(lang["play_already_paused"])
 
     await anon.pause(m.chat.id)
-    await m.reply(m.lang["play_paused"].format(m.from_user.mention_html()))
+    await m.reply(lang["play_paused"].format(m.from_user.mention_html()))
 
 
 @dp.message(Command("resume"))
-@lang.language()
 @admin_check
-async def resume_hndlr(m: types.Message):
+async def resume_hndlr(m: types.Message, lang: dict):
     if not await db.get_call(m.chat.id):
-        return await m.reply(m.lang["not_playing"])
+        return await m.reply(lang["not_playing"])
     if not await db.is_paused(m.chat.id):
-        return await m.reply(m.lang["play_not_paused"])
+        return await m.reply(lang["play_not_paused"])
 
     await anon.resume(m.chat.id)
-    await m.reply(m.lang["play_resumed"].format(m.from_user.mention_html()))
+    await m.reply(lang["play_resumed"].format(m.from_user.mention_html()))
 
 
 @dp.message(Command("stop", "end"))
-@lang.language()
 @admin_check
-async def stop_hndlr(m: types.Message):
+async def stop_hndlr(m: types.Message, lang: dict):
     if not await db.get_call(m.chat.id):
-        return await m.reply(m.lang["not_playing"])
+        return await m.reply(lang["not_playing"])
 
     await anon.stop(m.chat.id)
-    await m.reply(m.lang["play_stopped"].format(m.from_user.mention_html()))
+    await m.reply(lang["play_stopped"].format(m.from_user.mention_html()))
 
 
 @dp.message(Command("skip", "next"))
-@lang.language()
 @admin_check
-async def skip_hndlr(m: types.Message):
+async def skip_hndlr(m: types.Message, lang: dict):
     if not await db.get_call(m.chat.id):
-        return await m.reply(m.lang["not_playing"])
+        return await m.reply(lang["not_playing"])
 
-    await anon.skip(m.chat.id) # Assuming anon.skip exists or use play_next
-    # If skip doesn't exist in TgCall, it's usually play_next
-    # Let's check calls.py again later if needed.
-    await m.reply(m.lang["play_skipped"].format(m.from_user.mention_html()))
+    await anon.play_next(m.chat.id)
+    await m.reply(lang["play_skipped"].format(m.from_user.mention_html()))
 
 @dp.callback_query(F.data.startswith("controls "))
-@lang.language()
-async def _controls_cb(query: types.CallbackQuery):
+async def _controls_cb(query: types.CallbackQuery, lang: dict):
     data = query.data.split()
     action = data[1]
     chat_id = int(data[2])
@@ -71,18 +64,16 @@ async def _controls_cb(query: types.CallbackQuery):
 
     if action == "pause":
         await anon.pause(chat_id)
-        await query.answer(query.lang["paused"])
+        await query.answer(lang["paused"])
     elif action == "resume":
         await anon.resume(chat_id)
-        await query.answer(query.lang["playing"])
+        await query.answer(lang["playing"])
     elif action == "stop":
         await anon.stop(chat_id)
-        await query.answer(query.lang["stopped"])
+        await query.answer(lang["stopped"])
     elif action == "skip":
         await anon.play_next(chat_id)
-        await query.answer(query.lang["skipped"])
+        await query.answer(lang["skipped"])
     elif action == "replay":
         await anon.replay(chat_id)
-        await query.answer(query.lang["replayed"])
-
-    # Update message if needed
+        await query.answer(lang["replayed"])

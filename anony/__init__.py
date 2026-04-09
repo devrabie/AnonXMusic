@@ -47,6 +47,11 @@ from anony.core.bot import Bot
 app = Bot()
 dp = Dispatcher(storage=MemoryStorage())
 
+# Register Middleware
+from anony.core.middleware import LanguageMiddleware
+dp.message.middleware(LanguageMiddleware())
+dp.callback_query.middleware(LanguageMiddleware())
+
 from anony.core.dir import ensure_dirs
 ensure_dirs()
 

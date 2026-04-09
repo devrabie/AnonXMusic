@@ -17,13 +17,12 @@ class ManageChat(StatesGroup):
     entering_tg_link = State()
 
 @dp.message(Command("manage", "dashboard"), F.chat.type == enums.ChatType.PRIVATE)
-@lang.language()
-async def _dashboard(m: types.Message):
+async def _dashboard(m: types.Message, lang: dict):
     chats = await db.get_chats(user_id=m.from_user.id)
     if not chats:
         return await m.reply(
-            text=m.lang["no_chats"],
-            reply_markup=buttons.dashboard_markup(m.lang, [])
+            text=lang["no_chats"],
+            reply_markup=buttons.dashboard_markup(lang, [])
         )
 
     chat_list = []
@@ -35,18 +34,17 @@ async def _dashboard(m: types.Message):
             continue
 
     await m.reply(
-        text=m.lang["manage_chats"],
-        reply_markup=buttons.dashboard_markup(m.lang, chat_list)
+        text=lang["manage_chats"],
+        reply_markup=buttons.dashboard_markup(lang, chat_list)
     )
 
 @dp.callback_query(F.data == "manage_chats")
-@lang.language()
 async def _manage_chats_cb(query: types.CallbackQuery):
     chats = await db.get_chats(user_id=query.from_user.id)
     if not chats:
         return await query.message.edit_text(
-            text=query.lang["no_chats"],
-            reply_markup=buttons.dashboard_markup(query.lang, [])
+            text=lang["no_chats"],
+            reply_markup=buttons.dashboard_markup(lang, [])
         )
 
     chat_list = []
@@ -58,12 +56,11 @@ async def _manage_chats_cb(query: types.CallbackQuery):
             continue
 
     await query.message.edit_text(
-        text=query.lang["manage_chats"],
-        reply_markup=buttons.dashboard_markup(query.lang, chat_list)
+        text=lang["manage_chats"],
+        reply_markup=buttons.dashboard_markup(lang, chat_list)
     )
 
 @dp.callback_query(F.data.regexp(r"manage_chat (-?\d+)"))
-@lang.language()
 async def _manage_chat(query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
     url, status, stype, source = await db.get_stream(chat_id)
@@ -74,15 +71,14 @@ async def _manage_chat(query: types.CallbackQuery):
     if is_playing:
         keyboard = buttons.controls(chat_id)
     else:
-        keyboard = buttons.stream_markup(query.lang, chat_id, status, stype, source)
+        keyboard = buttons.stream_markup(lang, chat_id, status, stype, source)
 
     await query.message.edit_text(
-        text=query.lang["stream_settings"].format(chat_id),
+        text=lang["stream_settings"].format(chat_id),
         reply_markup=keyboard
     )
 
 @dp.callback_query(F.data.regexp(r"toggle_stype (-?\d+)"))
-@lang.language()
 async def _toggle_stype(query: types.CallbackQuery):
     chat_id = int(query.data.split()[1])
     url, status, stype, source = await db.get_stream(chat_id)
@@ -92,19 +88,17 @@ async def _toggle_stype(query: types.CallbackQuery):
     await _manage_chat(query)
 
 @dp.callback_query(F.data.regexp(r"set_url (-?\d+)"))
-@lang.language()
 async def _set_url_prompt(query: types.CallbackQuery, state: FSMContext):
     chat_id = int(query.data.split()[1])
     await state.update_data(chat_id=chat_id, last_msg=query.message.message_id)
     await state.set_state(ManageChat.entering_url)
     await query.message.edit_text(
-        query.lang["enter_url"],
-        reply_markup=buttons.cancel_markup(query.lang)
+        lang["enter_url"],
+        reply_markup=buttons.cancel_markup(lang)
     )
     await query.answer()
 
 @dp.message(ManageChat.entering_url)
-@lang.language()
 async def _process_url(m: types.Message, state: FSMContext):
     data = await state.get_data()
     chat_id = data.get("chat_id")
@@ -117,22 +111,20 @@ async def _process_url(m: types.Message, state: FSMContext):
     except:
         pass
 
-    await m.reply(m.lang["url_set"])
+    await m.reply(lang["url_set"])
     await state.clear()
 
 @dp.callback_query(F.data == "add_chat_manual")
-@lang.language()
 async def _add_chat_manual_prompt(query: types.CallbackQuery, state: FSMContext):
     await state.update_data(last_msg=query.message.message_id)
     await state.set_state(ManageChat.entering_chat_id)
     await query.message.edit_text(
-        query.lang["enter_chat_id"],
-        reply_markup=buttons.cancel_markup(query.lang)
+        lang["enter_chat_id"],
+        reply_markup=buttons.cancel_markup(lang)
     )
     await query.answer()
 
 @dp.message(ManageChat.entering_chat_id)
-@lang.language()
 async def _process_chat_id(m: types.Message, state: FSMContext):
     data = await state.get_data()
     chat_input = m.text.strip()
@@ -150,7 +142,7 @@ async def _process_chat_id(m: types.Message, state: FSMContext):
         except:
             pass
 
-        await m.reply(m.lang["chat_added"].format(chat.title))
+        await m.reply(lang["chat_added"].format(chat.title))
     except Exception as e:
         await m.reply(f"Error: {e}")
     await state.clear()

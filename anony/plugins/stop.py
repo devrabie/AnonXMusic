@@ -10,11 +10,10 @@ from anony.helpers import admin_check
 
 
 @dp.message(Command("stop", "end"))
-@lang.language()
 @admin_check
-async def stop_hndlr(m: types.Message):
+async def stop_hndlr(m: types.Message, lang: dict):
     if not await db.get_call(m.chat.id):
-        return await m.reply(m.lang["not_playing"])
+        return await m.reply(lang["not_playing"])
 
     await anon.stop(m.chat.id)
-    await m.reply(m.lang["play_stopped"].format(m.from_user.mention_html()))
+    await m.reply(lang["play_stopped"].format(m.from_user.mention_html()))

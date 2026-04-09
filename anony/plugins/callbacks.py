@@ -4,41 +4,38 @@
 
 
 from aiogram import types, F
-from anony import dp, lang, config, app
+from anony import dp, config, app
 from anony.helpers import buttons
 
 @dp.callback_query(F.data == "start_back")
-@lang.language()
-async def _start_back(query: types.CallbackQuery):
+async def _start_back(query: types.CallbackQuery, lang: dict):
     private = query.message.chat.type == "private"
     _text = (
-        query.lang["start_pm"].format(query.from_user.first_name, app.name)
+        lang["start_pm"].format(query.from_user.first_name, app.name)
         if private
-        else query.lang["start_gp"].format(app.name)
+        else lang["start_gp"].format(app.name)
     )
     await query.message.edit_text(
         text=_text,
-        reply_markup=buttons.start_key(query.lang, private, query.from_user.id)
+        reply_markup=buttons.start_key(lang, private, query.from_user.id)
     )
 
 @dp.callback_query(F.data == "help")
-@lang.language()
-async def _help_cb(query: types.CallbackQuery):
+async def _help_cb(query: types.CallbackQuery, lang: dict):
     await query.message.edit_text(
-        text=query.lang["help_menu"],
-        reply_markup=buttons.help_markup(query.lang)
+        text=lang["help_menu"],
+        reply_markup=buttons.help_markup(lang)
     )
 
 @dp.callback_query(F.data.startswith("help "))
-@lang.language()
-async def _help_items(query: types.CallbackQuery):
+async def _help_items(query: types.CallbackQuery, lang: dict):
     cb = query.data.split()[1]
     if cb == "back":
-        return await _help_cb(query)
+        return await _help_cb(query, lang)
 
     await query.message.edit_text(
-        text=query.lang[f"help_{cb}"],
-        reply_markup=buttons.help_markup(query.lang, back=True)
+        text=lang[f"help_{cb}"],
+        reply_markup=buttons.help_markup(lang, back=True)
     )
 
 @dp.callback_query(F.data == "close")

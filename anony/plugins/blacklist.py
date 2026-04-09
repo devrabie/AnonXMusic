@@ -5,23 +5,22 @@
 
 from aiogram import types, F
 from aiogram.filters import Command
-from anony import dp, lang, db, app
+from anony import dp, db, app
 
 
 @dp.message(Command("blacklist", "unblacklist"))
-@lang.language()
-async def blacklist_hndlr(m: types.Message):
-    if str(m.from_user.id) != str(app.owner):
+async def blacklist_hndlr(m: types.Message, lang: dict):
+    if m.from_user.id != int(app.owner):
         return
 
     command = m.text.split()
     if len(command) < 2:
-        return await m.reply(m.lang["bl_usage"].format(command[0][1:]))
+        return await m.reply(lang["bl_usage"].format(command[0][1:]))
 
     target = int(command[1])
     if "un" in command[0]:
         await db.unblacklist_chat(target)
-        await m.reply(m.lang["bl_removed"])
+        await m.reply(lang["bl_removed"])
     else:
         await db.blacklist_chat(target)
-        await m.reply(m.lang["bl_added"])
+        await m.reply(lang["bl_added"])

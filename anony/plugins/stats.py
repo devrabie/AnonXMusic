@@ -9,7 +9,6 @@ from anony import dp, lang, db, app
 
 
 @dp.message(Command("stats"))
-@lang.language()
-async def stats_hndlr(m: types.Message):
+async def stats_hndlr(m: types.Message, lang: dict):
     # Simplified stats for migration
-    await m.reply(m.lang["stats_user"].format(app.name, 0, 0, 0, 0, 0, 0, 0))
+    await m.reply(lang["stats_user"].format(app.name, 0, 0, 0, 0, 0, 0, 0))

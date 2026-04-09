@@ -19,16 +19,25 @@ class Bot(AiogramBot):
         )
         self.owner = config.OWNER_ID
         self.logger_id = config.LOGGER_ID
+        self.sudoers = [int(self.owner)]
+
+    @property
+    def name(self):
+        return self.me.first_name
+
+    @property
+    def username(self):
+        return self.me.username
+
+    @property
+    def mention(self):
+        return f"@{self.username}"
 
     async def boot(self):
         """
         Starts the bot and performs initial setup.
         """
         self.me = await self.get_me()
-        self.id = self.me.id
-        self.name = self.me.first_name
-        self.username = self.me.username
-        self.mention = f"@{self.username}"
 
         try:
             await self.send_message(self.logger_id, "Bot Started")
