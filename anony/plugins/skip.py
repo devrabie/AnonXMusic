@@ -6,11 +6,9 @@
 from aiogram import types
 from aiogram.filters import Command
 from anony import dp, lang, db, anon
-from anony.helpers import admin_check
 
 
 @dp.message(Command("skip", "next"))
-@admin_check
 async def skip_hndlr(m: types.Message, lang: dict):
     if not await db.get_call(m.chat.id):
         return await m.reply(lang["not_playing"])

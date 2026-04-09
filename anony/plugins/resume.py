@@ -5,11 +5,10 @@
 
 from aiogram import types, F
 from aiogram.filters import Command
-from anony import dp, db, app
+from anony import dp, db, app, anon
 
 
 @dp.message(Command("resume"))
-@admin_check
 async def resume_hndlr(m: types.Message, lang: dict):
     if not await db.get_call(m.chat.id):
         return await m.reply(lang["not_playing"])

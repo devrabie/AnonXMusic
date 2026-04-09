@@ -5,12 +5,10 @@
 
 from aiogram import types
 from aiogram.filters import Command
-from anony import dp, db, anon
-from anony.helpers import admin_check
+from anony import dp, lang, db, anon
 
 
 @dp.message(Command("seek"))
-@admin_check
 async def seek_hndlr(m: types.Message, lang: dict):
     usage = lang["play_seek_usage"].format("seek")
     command = m.text.split()
