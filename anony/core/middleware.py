@@ -6,7 +6,6 @@ from typing import Any, Awaitable, Callable, Dict
 from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery, TelegramObject
 
-from anony import db, lang
 
 class LanguageMiddleware(BaseMiddleware):
     async def __call__(
@@ -15,6 +14,8 @@ class LanguageMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
+        from anony import db, lang
+
         chat = None
         if isinstance(event, Message):
             chat = event.chat
