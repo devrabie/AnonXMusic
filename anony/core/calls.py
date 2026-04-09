@@ -10,7 +10,7 @@ from pytgcalls import PyTgCalls, exceptions, types
 from pytgcalls.pytgcalls_session import PyTgCallsSession
 
 from anony import (app, config, db, lang, logger,
-                   queue, thumb, userbot, yt)
+                   userbot, yt)
 from anony.helpers import Media, Track, buttons
 
 
@@ -29,6 +29,7 @@ class TgCall(PyTgCalls):
         return await client.resume(chat_id)
 
     async def stop(self, chat_id: int) -> None:
+        from anony import queue
         client = await db.get_assistant(chat_id)
         queue.clear(chat_id)
         await db.remove_call(chat_id)
@@ -49,6 +50,7 @@ class TgCall(PyTgCalls):
         stream_url: str = None,
         video: bool = False,
     ) -> None:
+        from anony import thumb
         client = await db.get_assistant(chat_id)
         ub = await db.get_client(chat_id)
         if not ub:
@@ -228,6 +230,7 @@ class TgCall(PyTgCalls):
 
 
     async def replay(self, chat_id: int) -> None:
+        from anony import queue
         if not await db.get_call(chat_id):
             return
 
@@ -239,6 +242,7 @@ class TgCall(PyTgCalls):
 
 
     async def play_next(self, chat_id: int) -> None:
+        from anony import queue
         if loop := await db.get_loop(chat_id):
             await db.set_loop(chat_id, loop - 1)
             return await self.replay(chat_id)

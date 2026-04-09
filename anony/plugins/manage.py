@@ -39,7 +39,7 @@ async def _dashboard(m: types.Message, lang: dict):
     )
 
 @dp.callback_query(F.data == "manage_chats")
-async def _manage_chats_cb(query: types.CallbackQuery):
+async def _manage_chats_cb(query: types.CallbackQuery, lang: dict):
     chats = await db.get_chats(user_id=query.from_user.id)
     if not chats:
         return await query.message.edit_text(
@@ -61,7 +61,7 @@ async def _manage_chats_cb(query: types.CallbackQuery):
     )
 
 @dp.callback_query(F.data.regexp(r"manage_chat (-?\d+)"))
-async def _manage_chat(query: types.CallbackQuery):
+async def _manage_chat(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
     url, status, stype, source = await db.get_stream(chat_id)
 
@@ -79,7 +79,7 @@ async def _manage_chat(query: types.CallbackQuery):
     )
 
 @dp.callback_query(F.data.regexp(r"toggle_stype (-?\d+)"))
-async def _toggle_stype(query: types.CallbackQuery):
+async def _toggle_stype(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
     url, status, stype, source = await db.get_stream(chat_id)
 
@@ -88,7 +88,7 @@ async def _toggle_stype(query: types.CallbackQuery):
     await _manage_chat(query)
 
 @dp.callback_query(F.data.regexp(r"set_url (-?\d+)"))
-async def _set_url_prompt(query: types.CallbackQuery, state: FSMContext):
+async def _set_url_prompt(query: types.CallbackQuery, state: FSMContext, lang: dict):
     chat_id = int(query.data.split()[1])
     await state.update_data(chat_id=chat_id, last_msg=query.message.message_id)
     await state.set_state(ManageChat.entering_url)
@@ -99,7 +99,7 @@ async def _set_url_prompt(query: types.CallbackQuery, state: FSMContext):
     await query.answer()
 
 @dp.message(ManageChat.entering_url)
-async def _process_url(m: types.Message, state: FSMContext):
+async def _process_url(m: types.Message, state: FSMContext, lang: dict):
     data = await state.get_data()
     chat_id = data.get("chat_id")
     url = m.text
@@ -115,7 +115,7 @@ async def _process_url(m: types.Message, state: FSMContext):
     await state.clear()
 
 @dp.callback_query(F.data == "add_chat_manual")
-async def _add_chat_manual_prompt(query: types.CallbackQuery, state: FSMContext):
+async def _add_chat_manual_prompt(query: types.CallbackQuery, state: FSMContext, lang: dict):
     await state.update_data(last_msg=query.message.message_id)
     await state.set_state(ManageChat.entering_chat_id)
     await query.message.edit_text(
@@ -125,7 +125,7 @@ async def _add_chat_manual_prompt(query: types.CallbackQuery, state: FSMContext)
     await query.answer()
 
 @dp.message(ManageChat.entering_chat_id)
-async def _process_chat_id(m: types.Message, state: FSMContext):
+async def _process_chat_id(m: types.Message, state: FSMContext, lang: dict):
     data = await state.get_data()
     chat_input = m.text.strip()
     try:

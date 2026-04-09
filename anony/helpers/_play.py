@@ -7,12 +7,13 @@ import asyncio
 from aiogram import types, enums, F
 from pyrogram import enums as pyenums, errors
 
-from anony import app, config, db, logger, queue, yt
+from anony import app, config, db, logger, yt
 from anony.helpers import utils
 
 
 def checkUB(play):
     async def wrapper(event: types.Message, lang: dict, *args, **kwargs):
+        from anony import queue
         m = event
         if not m.from_user:
             return await m.reply(lang["play_user_invalid"])

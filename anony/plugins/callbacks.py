@@ -39,5 +39,5 @@ async def _help_items(query: types.CallbackQuery, lang: dict):
     )
 
 @dp.callback_query(F.data == "close")
-async def _close(query: types.CallbackQuery):
+async def _close(query: types.CallbackQuery, lang: dict):
     await query.message.delete()

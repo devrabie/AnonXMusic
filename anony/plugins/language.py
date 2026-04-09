@@ -23,7 +23,7 @@ async def _lang_cb(query: types.CallbackQuery, lang: dict):
     )
 
 @dp.callback_query(F.data.startswith("lang_change "))
-async def _lang_change(query: types.CallbackQuery):
+async def _lang_change(query: types.CallbackQuery, lang: dict):
     code = query.data.split()[1]
     curr = await db.get_lang(query.message.chat.id)
     # Get current lang for answer
