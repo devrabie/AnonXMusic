@@ -11,6 +11,78 @@ from anony import app, config, db, logger
 from . import utils
 
 
+async def process_play(m: types.Message, lang: dict, chat_id: int, command: str, video: bool, force: bool, url: str = None):
+    from anony import tg, yt, anon, queue
+    # If no URL, try to get from message (reply or text)
+    if not url:
+        url = utils.get_url(m)
+
+    media = None
+    if m.reply_to_message and (m.reply_to_message.audio or m.reply_to_message.video or m.reply_to_message.document):
+        sent = await m.reply(lang["play_downloading"])
+        # Bridge aiogram and pyrogram for download via assistant
+        from anony import userbot
+        client = userbot.clients[0] if userbot.clients else None
+        if not client:
+             return await sent.edit_text(lang["play_no_assistant"])
+
+        try:
+            # We need the pyrogram message object. We can try to get it by ID
+            # But the assistant might not be in the chat where the reply is.
+            # Usually, for replies, we assume it's in the same chat.
+            p_msg = await client.get_messages(m.chat.id, m.reply_to_message.message_id)
+            media = await tg.download(p_msg, sent, lang)
+        except Exception as e:
+            return await sent.edit_text(f"Error: {e}")
+    elif url:
+        if "t.me/" in url:
+            sent = await m.reply(lang["play_searching"])
+            media = await tg.get_from_link(url, sent, lang)
+            if not media:
+                return await sent.edit_text(lang["play_not_found"].format(config.SUPPORT_CHAT))
+            await sent.delete()
+        else:
+            return await m.reply(lang["yt_disabled"])
+    else:
+        # Search is disabled as per user instruction if it's for YouTube
+        # But user mentioned "playing through search in the channel playlist"
+        # For now, let's just return yt_disabled if it's not a link/reply
+        return await m.reply(lang["yt_disabled"])
+
+    if not media:
+        return
+
+    # Check duration if available
+    duration_sec = getattr(media, "duration_sec", 0)
+    if duration_sec > config.DURATION_LIMIT:
+        return await m.reply(lang["play_duration_limit"].format(config.DURATION_LIMIT_MIN))
+
+    media.user = m.from_user.mention_html()
+
+    if force:
+        await anon.stop(chat_id)
+
+    position = queue.add(chat_id, media)
+
+    if position == 0 and not await db.get_call(chat_id):
+        if not await join_assistant(chat_id, lang, m):
+            return
+        await anon.play_media(chat_id, m if m.chat.id == chat_id else None, media)
+        if m.chat.id != chat_id:
+             await m.reply(lang["play_started"].format(media.title, chat_id))
+    else:
+        await m.reply(
+            lang["play_queued"].format(
+                position,
+                media.url or "#",
+                media.title,
+                media.duration,
+                m.from_user.mention_html(),
+            ),
+            disable_web_page_preview=True
+        )
+
+
 async def join_assistant(chat_id: int, lang: dict, m: types.Message = None):
     client = await db.get_client(chat_id)
     if not client:

@@ -209,64 +209,15 @@ async def _play_target_cb(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
     command = query.data.split(maxsplit=2)[2]
 
-    # Mock a message for play_hndlr
+    # Mock a message for process_play
     mock_msg = query.message
     mock_msg.text = command
-    mock_msg.chat.id = chat_id
-    mock_msg.chat.type = enums.ChatType.SUPERGROUP # Force group type for checkUB logic if reused
     mock_msg.from_user = query.from_user
 
-    # We need to call play_hndlr directly or similar logic
-
-    # Since we use checkUB decorator, we might need to bypass it or handle arguments
-    # Let's just implement the play logic here or extract it
     video = "vplay" in command
     force = "force" in command
-    url = utils.get_url(mock_msg)
-    m3u8 = url and not yt.valid(url)
 
-    # For private chat vplay, we usually have a link or query
-    # Extraction logic similar to play_hndlr
-    if url:
-        sent = await query.message.edit_text(lang["play_searching"])
-        media = await yt.details(url, video)
-        if not media:
-            return await sent.edit_text(lang["play_not_found"].format(config.SUPPORT_CHAT))
-        media.user = query.from_user.mention_html()
-        await sent.delete()
-    else:
-        command_parts = command.split(maxsplit=1)
-        if len(command_parts) < 2:
-            return await query.answer(lang["play_usage"], show_alert=True)
-
-        sent = await query.message.edit_text(lang["play_searching"])
-        query_text = command_parts[1]
-        media = await yt.details(query_text, video)
-        if not media:
-            return await sent.edit_text(lang["play_not_found"].format(config.SUPPORT_CHAT))
-        media.user = query.from_user.mention_html()
-        await sent.delete()
-
-    if media.duration_seconds > config.DURATION_LIMIT:
-        return await query.message.answer(lang["play_duration_limit"].format(config.DURATION_LIMIT_MIN))
-
-    if force:
-        await anon.stop(chat_id)
-
-    position = queue.add(chat_id, media)
-    if position == 0 and not await db.get_call(chat_id):
-        await anon.play_media(chat_id, None, media)
-        await query.message.answer(lang["play_started"].format(media.title, chat_id))
-    else:
-        await query.message.answer(
-            lang["play_queued"].format(
-                position,
-                media.url,
-                media.title,
-                media.duration,
-                query.from_user.mention_html(),
-            )
-        )
+    await process_play(mock_msg, lang, chat_id, command, video, force)
 
 @dp.callback_query(F.data == "add_chat_manual")
 async def _add_chat_manual_prompt(query: types.CallbackQuery, state: FSMContext, lang: dict):

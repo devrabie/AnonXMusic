@@ -40,12 +40,14 @@ class Telegram:
         else:
             await query.answer(query.lang["dl_not_found"], show_alert=True)
 
-    async def download(self, msg: types.Message, sent: types.Message) -> Media | None:
-        msg_id = sent.id
+    async def download(self, msg: types.Message, sent: types.Message, lang: dict = None) -> Media | None:
+        msg_id = sent.message_id if hasattr(sent, "message_id") else sent.id
         event = asyncio.Event()
         self.events[msg_id] = event
         self.last_edit[msg_id] = 0
         start_time = time.time()
+
+        _lang = lang or getattr(sent, "lang", None) or {}
 
         media = msg.audio or msg.voice or msg.video or msg.document
         file_id = getattr(media, "file_unique_id", None)
@@ -56,12 +58,12 @@ class Telegram:
         video = bool(getattr(media, "mime_type", "").startswith("video/"))
 
         if duration > config.DURATION_LIMIT:
-            await sent.edit_text(sent.lang["play_duration_limit"].format(config.DURATION_LIMIT // 60))
-            return await sent.stop_propagation()
+            await sent.edit_text(_lang.get("play_duration_limit", "Limit").format(config.DURATION_LIMIT // 60))
+            return None
 
         if file_size > 200 * 1024 * 1024:
-            await sent.edit_text(sent.lang["dl_limit"])
-            return await sent.stop_propagation()
+            await sent.edit_text(_lang.get("dl_limit", "Limit"))
+            return None
 
         async def progress(current, total):
             if event.is_set():
@@ -75,7 +77,7 @@ class Telegram:
             percent = current * 100 / total
             speed = current / (now - start_time or 1e-6)
             eta = utils.format_eta(int((total - current) / speed))
-            text = sent.lang["dl_progress"].format(
+            text = _lang.get("dl_progress", "Downloading...").format(
                 utils.format_size(current),
                 utils.format_size(total),
                 percent,
@@ -84,15 +86,15 @@ class Telegram:
             )
 
             await sent.edit_text(
-                text, reply_markup=buttons.cancel_dl(sent.lang["cancel"])
+                text, reply_markup=buttons.cancel_dl(_lang.get("cancel", "Cancel"))
             )
 
         try:
             file_path = f"downloads/{file_id}.{file_ext}"
             if not os.path.exists(file_path):
                 if file_id in self.active:
-                    await sent.edit_text(sent.lang["dl_active"])
-                    return await sent.stop_propagation()
+                    await sent.edit_text(_lang.get("dl_active", "Active"))
+                    return None
 
                 self.active.append(file_id)
                 task = asyncio.create_task(
@@ -103,7 +105,7 @@ class Telegram:
                 if file_id in self.active: self.active.remove(file_id)
                 self.active_tasks.pop(msg_id, None)
                 await sent.edit_text(
-                    sent.lang["dl_complete"].format(round(time.time() - start_time, 2))
+                    _lang.get("dl_complete", "Done").format(round(time.time() - start_time, 2))
                 )
 
             return Media(
@@ -111,13 +113,13 @@ class Telegram:
                 duration=time.strftime("%M:%S", time.gmtime(duration)),
                 duration_sec=duration,
                 file_path=file_path,
-                message_id=sent.id,
+                message_id=msg_id,
                 url=msg.link,
                 title=file_title[:25],
                 video=video,
             )
         except asyncio.CancelledError:
-            return await sent.stop_propagation()
+            return None
         finally:
             self.events.pop(msg_id, None)
             self.last_edit.pop(msg_id, None)
@@ -134,7 +136,7 @@ class Telegram:
             video=video,
         )
 
-    async def get_from_link(self, link: str, sent: types.Message) -> Media | None:
+    async def get_from_link(self, link: str, sent: types.Message, lang: dict = None) -> Media | None:
         try:
             link = link.strip()
             if "t.me/c/" in link:
@@ -153,7 +155,9 @@ class Telegram:
         msg = None
         # Try main bot first
         try:
-            msg = await app.get_messages(chat, msg_id)
+            # We can't use app.get_messages (Aiogram Bot has no such method)
+            # Use assistant instead or just skip app
+            pass
         except Exception:
             pass
 
@@ -177,4 +181,4 @@ class Telegram:
         if not msg or msg.empty or not self.get_media(msg):
             return None
 
-        return await self.download(msg, sent)
+        return await self.download(msg, sent, lang)

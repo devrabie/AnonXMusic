@@ -192,5 +192,14 @@
     "enter_telegram_link": "🔗 Please send a public Telegram link (e.g., https://t.me/Video_ra/132990)",
     "invalid_telegram_link": "❌ Invalid Telegram link or unsupported media.",
     "select_chat": "🎯 Please select the channel or group you want to play in:",
-    "no_chats_to_play": "📩 You haven't added any channels or groups yet. Add them from the dashboard first."
+    "no_chats_to_play": "📩 You haven't added any channels or groups yet. Add them from the dashboard first.",
+    "playlist_management": "📜 Playlist Management",
+    "clear_queue": "🗑️ Clear Queue",
+    "queue_cleared": "✅ Queue cleared.",
+    "item_deleted": "🗑️ Item removed from queue.",
+    "playing_item": "▶️ Playing selected item...",
+    "play_chat_selection": "🎯 Please select the chat to play in:",
+    "error_no_url": "❌ No stream URL set. Please set a URL first.",
+    "yt_disabled": "❌ YouTube search/download is temporarily disabled. Please use public Telegram links.",
+    "play_started": "▶️ Started playing **{0}** in `{1}`."
 }
