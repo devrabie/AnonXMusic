@@ -71,11 +71,11 @@ from anony.helpers import Queue, Thumbnail
 queue = Queue()
 thumb = Thumbnail()
 
-from anony.core.calls import TgCall
-anon = TgCall()
-
 from anony.core.youtube import YouTube
 yt = YouTube()
+
+from anony.core.calls import TgCall
+anon = TgCall()
 
 
 async def stop() -> None:

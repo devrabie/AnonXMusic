@@ -8,7 +8,7 @@ from aiogram import types, enums, F
 from pyrogram import enums as pyenums, errors
 
 from anony import app, config, db, logger
-from anony.helpers import utils
+from . import utils
 
 
 def checkUB(play):

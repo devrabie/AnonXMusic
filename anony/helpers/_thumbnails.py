@@ -9,7 +9,7 @@ from PIL import (Image, ImageDraw, ImageEnhance,
                  ImageFilter, ImageFont, ImageOps)
 
 from anony import config
-from anony.helpers import Track
+from ._dataclass import Track
 
 
 class Thumbnail:
