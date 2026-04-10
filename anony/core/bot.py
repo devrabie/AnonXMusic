@@ -23,11 +23,11 @@ class Bot(AiogramBot):
 
     @property
     def name(self):
-        return self.me.first_name
+        return self._me.first_name
 
     @property
     def username(self):
-        return self.me.username
+        return self._me.username
 
     @property
     def mention(self):
@@ -37,7 +37,7 @@ class Bot(AiogramBot):
         """
         Starts the bot and performs initial setup.
         """
-        self.me = await self.get_me()
+        self._me = await self.get_me()
 
         try:
             await self.send_message(self.logger_id, "Bot Started")
