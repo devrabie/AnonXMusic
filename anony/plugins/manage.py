@@ -8,7 +8,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from anony import app, dp, db, lang, anon, tg, queue
+from anony import app, dp, db, lang, anon, tg, queue, config
 from anony.helpers import buttons
 
 class ManageChat(StatesGroup):
@@ -85,7 +85,45 @@ async def _toggle_stype(query: types.CallbackQuery, lang: dict):
 
     new_type = "video" if stype == "audio" else "audio"
     await db.set_stream(chat_id, stype=new_type)
-    await _manage_chat(query)
+    await _manage_chat(query, lang)
+
+@dp.callback_query(F.data.regexp(r"toggle_source (-?\d+)"))
+async def _toggle_source(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    url, status, stype, source = await db.get_stream(chat_id)
+
+    new_source = "playlist" if source == "url" else "url"
+    await db.set_stream(chat_id, source=new_source)
+    await _manage_chat(query, lang)
+
+@dp.callback_query(F.data.regexp(r"toggle_stream (-?\d+)"))
+async def _toggle_stream(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    url, status, stype, source = await db.get_stream(chat_id)
+
+    new_status = not status
+    await db.set_stream(chat_id, status=new_status)
+
+    if new_status:
+        if source == "url":
+            if not url:
+                return await query.answer(lang["error_no_url"], show_alert=True)
+            try:
+                await anon.play_media(chat_id, None, stream_url=url, video=(stype == "video"))
+            except Exception as e:
+                return await query.answer(f"Error: {e}", show_alert=True)
+        else:
+            try:
+                await anon.play_next(chat_id)
+            except Exception as e:
+                return await query.answer(f"Error: {e}", show_alert=True)
+    else:
+        try:
+            await anon.stop(chat_id)
+        except Exception:
+            pass
+
+    await _manage_chat(query, lang)
 
 @dp.callback_query(F.data.regexp(r"set_url (-?\d+)"))
 async def _set_url_prompt(query: types.CallbackQuery, state: FSMContext, lang: dict):
@@ -145,4 +183,41 @@ async def _process_chat_id(m: types.Message, state: FSMContext, lang: dict):
         await m.reply(lang["chat_added"].format(chat.title))
     except Exception as e:
         await m.reply(f"Error: {e}")
+    await state.clear()
+
+@dp.callback_query(F.data.regexp(r"add_local (-?\d+)"))
+async def _add_local_prompt(query: types.CallbackQuery, state: FSMContext, lang: dict):
+    chat_id = int(query.data.split()[1])
+    await state.update_data(chat_id=chat_id, last_msg=query.message.message_id)
+    await state.set_state(ManageChat.entering_tg_link)
+    await query.message.edit_text(
+        lang["enter_telegram_link"],
+        reply_markup=buttons.cancel_markup(lang)
+    )
+    await query.answer()
+
+@dp.message(ManageChat.entering_tg_link)
+async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
+    data = await state.get_data()
+    chat_id = data.get("chat_id")
+    link = m.text.strip()
+
+    try:
+        media = await tg.get_from_link(link)
+        if not media:
+             return await m.reply(lang["play_not_found"].format(config.SUPPORT_CHAT))
+
+        # Associate with the user who added it
+        media.user = m.from_user.mention_html()
+        queue.add(chat_id, media)
+        await m.reply(lang["play_queued"].format(len(queue.get_queue(chat_id))))
+
+        try:
+            await m.bot.delete_message(m.chat.id, data.get("last_msg"))
+        except:
+            pass
+
+    except Exception as e:
+        await m.reply(f"Error: {e}")
+
     await state.clear()
