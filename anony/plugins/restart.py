@@ -4,7 +4,7 @@
 
 
 import os
-from aiogram import types
+from aiogram import types, F
 from aiogram.filters import Command
 from anony import dp, app, logger
 
