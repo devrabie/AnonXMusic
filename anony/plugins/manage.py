@@ -270,14 +270,25 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
     link = m.text.strip()
 
     try:
-        media = await tg.get_from_link(link)
+        sent = await m.reply(lang["play_searching"])
+        media = await tg.get_from_link(link, sent, lang)
         if not media:
-             return await m.reply(lang["play_not_found"].format(config.SUPPORT_CHAT))
+             return await sent.edit_text(lang["play_not_found"].format(config.SUPPORT_CHAT))
 
         # Associate with the user who added it
         media.user = m.from_user.mention_html()
-        queue.add(chat_id, media)
-        await m.reply(lang["play_queued"].format(len(queue.get_queue(chat_id))))
+        position = queue.add(chat_id, media)
+        await m.reply(
+            lang["play_queued"].format(
+                position,
+                media.url or "#",
+                media.title,
+                media.duration,
+                m.from_user.mention_html(),
+            ),
+            disable_web_page_preview=True
+        )
+        await sent.delete()
 
         try:
             await m.bot.delete_message(m.chat.id, data.get("last_msg"))

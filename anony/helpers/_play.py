@@ -17,6 +17,13 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
     if not url:
         url = utils.get_url(m)
 
+    # Fallback for manual link extraction if utils.get_url fails (e.g. from callback command)
+    if not url and command:
+        for word in command.split():
+            if word.startswith("http"):
+                url = word
+                break
+
     media = None
     if m.reply_to_message and (m.reply_to_message.audio or m.reply_to_message.video or m.reply_to_message.document):
         sent = await m.reply(lang["play_downloading"])
