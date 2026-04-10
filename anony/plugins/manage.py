@@ -3,13 +3,14 @@
 # This file is part of AnonXMusic
 
 import asyncio
+import collections
 from aiogram import types, F, enums
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from anony import app, dp, db, lang, anon, tg, queue, config
-from anony.helpers import buttons
+from anony.helpers import buttons, join_assistant, utils
 
 class ManageChat(StatesGroup):
     entering_url = State()
@@ -125,6 +126,57 @@ async def _toggle_stream(query: types.CallbackQuery, lang: dict):
 
     await _manage_chat(query, lang)
 
+@dp.callback_query(F.data.regexp(r"manage_playlist (-?\d+)"))
+async def _manage_playlist(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    queue_list = queue.get_queue(chat_id)
+    await query.message.edit_text(
+        text=lang["playlist_management"],
+        reply_markup=buttons.playlist_markup(lang, chat_id, queue_list)
+    )
+
+@dp.callback_query(F.data.regexp(r"clear_queue (-?\d+)"))
+async def _clear_queue(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    queue.clear(chat_id)
+    await query.answer(lang["queue_cleared"])
+    await _manage_playlist(query, lang)
+
+@dp.callback_query(F.data.regexp(r"del_item (-?\d+) (\d+)"))
+async def _del_item(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    idx = int(query.data.split()[2])
+    q = queue.queues[chat_id]
+    if 0 <= idx < len(q):
+        # Deque doesn't support direct index deletion easily if not using list, but we can do:
+        lst = list(q)
+        lst.pop(idx)
+        queue.queues[chat_id] = collections.deque(lst)
+
+    await query.answer(lang["item_deleted"])
+    await _manage_playlist(query, lang)
+
+@dp.callback_query(F.data.regexp(r"play_item (-?\d+) (\d+)"))
+async def _play_item(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    idx = int(query.data.split()[2])
+    q = queue.queues[chat_id]
+    if 0 <= idx < len(q):
+        lst = list(q)
+        item = lst.pop(idx)
+        # Move to front
+        q.clear()
+        q.append(item)
+        q.extend(lst)
+
+        await anon.stop(chat_id)
+        if not await join_assistant(chat_id, lang, query.message):
+            return
+        await anon.play_media(chat_id, None, item)
+        await query.answer(lang["playing_item"])
+
+    await _manage_playlist(query, lang)
+
 @dp.callback_query(F.data.regexp(r"set_url (-?\d+)"))
 async def _set_url_prompt(query: types.CallbackQuery, state: FSMContext, lang: dict):
     chat_id = int(query.data.split()[1])
@@ -151,6 +203,70 @@ async def _process_url(m: types.Message, state: FSMContext, lang: dict):
 
     await m.reply(lang["url_set"])
     await state.clear()
+
+@dp.callback_query(F.data.regexp(r"play_target (-?\d+) (.+)"))
+async def _play_target_cb(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    command = query.data.split(maxsplit=2)[2]
+
+    # Mock a message for play_hndlr
+    mock_msg = query.message
+    mock_msg.text = command
+    mock_msg.chat.id = chat_id
+    mock_msg.chat.type = enums.ChatType.SUPERGROUP # Force group type for checkUB logic if reused
+    mock_msg.from_user = query.from_user
+
+    # We need to call play_hndlr directly or similar logic
+
+    # Since we use checkUB decorator, we might need to bypass it or handle arguments
+    # Let's just implement the play logic here or extract it
+    video = "vplay" in command
+    force = "force" in command
+    url = utils.get_url(mock_msg)
+    m3u8 = url and not yt.valid(url)
+
+    # For private chat vplay, we usually have a link or query
+    # Extraction logic similar to play_hndlr
+    if url:
+        sent = await query.message.edit_text(lang["play_searching"])
+        media = await yt.details(url, video)
+        if not media:
+            return await sent.edit_text(lang["play_not_found"].format(config.SUPPORT_CHAT))
+        media.user = query.from_user.mention_html()
+        await sent.delete()
+    else:
+        command_parts = command.split(maxsplit=1)
+        if len(command_parts) < 2:
+            return await query.answer(lang["play_usage"], show_alert=True)
+
+        sent = await query.message.edit_text(lang["play_searching"])
+        query_text = command_parts[1]
+        media = await yt.details(query_text, video)
+        if not media:
+            return await sent.edit_text(lang["play_not_found"].format(config.SUPPORT_CHAT))
+        media.user = query.from_user.mention_html()
+        await sent.delete()
+
+    if media.duration_seconds > config.DURATION_LIMIT:
+        return await query.message.answer(lang["play_duration_limit"].format(config.DURATION_LIMIT_MIN))
+
+    if force:
+        await anon.stop(chat_id)
+
+    position = queue.add(chat_id, media)
+    if position == 0 and not await db.get_call(chat_id):
+        await anon.play_media(chat_id, None, media)
+        await query.message.answer(lang["play_started"].format(media.title, chat_id))
+    else:
+        await query.message.answer(
+            lang["play_queued"].format(
+                position,
+                media.url,
+                media.title,
+                media.duration,
+                query.from_user.mention_html(),
+            )
+        )
 
 @dp.callback_query(F.data == "add_chat_manual")
 async def _add_chat_manual_prompt(query: types.CallbackQuery, state: FSMContext, lang: dict):

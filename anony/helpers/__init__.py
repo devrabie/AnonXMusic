@@ -14,4 +14,4 @@ from ._utilities import Utilities
 buttons = Inline()
 utils = Utilities()
 
-from ._play import checkUB
+from ._play import checkUB, join_assistant
