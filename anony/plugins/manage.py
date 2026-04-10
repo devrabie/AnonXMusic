@@ -4,6 +4,7 @@
 
 import asyncio
 import collections
+import html
 from aiogram import types, F, enums
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -282,7 +283,7 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
             lang["play_queued"].format(
                 position,
                 media.url or "#",
-                media.title,
+                html.escape(media.title),
                 media.duration,
                 m.from_user.mention_html(),
             ),

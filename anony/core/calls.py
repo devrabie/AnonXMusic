@@ -3,6 +3,7 @@
 # This file is part of AnonXMusic
 
 
+import html
 from ntgcalls import (ConnectionNotFound, TelegramServerError,
                       RTMPStreamingUnsupported, ConnectionError)
 from pyrogram import errors, types as pytypes
@@ -69,10 +70,10 @@ class TgCall(PyTgCalls):
 
         # Resolve peer to avoid PeerIdInvalid
         try:
-            await ub.resolve_peer(chat_id)
+            await ub.get_chat(chat_id)
         except Exception:
             try:
-                await ub.get_chat(chat_id)
+                await ub.resolve_peer(chat_id)
             except Exception:
                 pass
 
@@ -174,7 +175,7 @@ class TgCall(PyTgCalls):
                 await db.add_call(chat_id)
                 text = _lang["play_media"].format(
                     media.url,
-                    media.title,
+                    html.escape(media.title),
                     media.duration,
                     media.user,
                 )

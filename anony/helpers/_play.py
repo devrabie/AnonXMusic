@@ -4,6 +4,7 @@
 
 
 import asyncio
+import html
 from aiogram import types, enums, F
 from pyrogram import enums as pyenums, errors
 
@@ -76,13 +77,13 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
             return
         await anon.play_media(chat_id, m if m.chat.id == chat_id else None, media)
         if m.chat.id != chat_id:
-             await m.reply(lang["play_started"].format(media.title, chat_id))
+             await m.reply(lang["play_started"].format(html.escape(media.title), chat_id))
     else:
         await m.reply(
             lang["play_queued"].format(
                 position,
                 media.url or "#",
-                media.title,
+                html.escape(media.title),
                 media.duration,
                 m.from_user.mention_html(),
             ),
@@ -162,9 +163,15 @@ async def join_assistant(chat_id: int, lang: dict, m: types.Message = None):
             return False
 
         if umm: await umm.delete()
+
+    # Crucial: Always force peer caching after join or even if already in chat
+    # This resolves PeerIdInvalid for in_memory sessions
+    try:
+        await client.get_chat(chat_id)
+    except Exception:
         try:
             await client.resolve_peer(chat_id)
-        except:
+        except Exception:
             pass
 
     # Ensure assistant is promoted
