@@ -71,7 +71,10 @@ class TgCall(PyTgCalls):
         try:
             await ub.resolve_peer(chat_id)
         except Exception:
-            pass
+            try:
+                await ub.get_chat(chat_id)
+            except Exception:
+                pass
 
         # Ensure assistant is in chat and promoted
         try:

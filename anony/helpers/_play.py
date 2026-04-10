@@ -89,6 +89,15 @@ async def join_assistant(chat_id: int, lang: dict, m: types.Message = None):
         if m: await m.reply(lang["play_no_assistant"])
         return False
 
+    # Resolve peer to avoid PeerIdInvalid
+    try:
+        await client.resolve_peer(chat_id)
+    except Exception:
+        try:
+            await client.get_chat(chat_id)
+        except Exception:
+            pass
+
     try:
         member = await client.get_chat_member(chat_id, client.id)
         if member.status in [
@@ -151,9 +160,9 @@ async def join_assistant(chat_id: int, lang: dict, m: types.Message = None):
         except:
             pass
 
-    # Ensure assistant is promoted if in channel
+    # Ensure assistant is promoted
     chat = await app.get_chat(chat_id)
-    if chat.type == enums.ChatType.CHANNEL:
+    if chat.type in [enums.ChatType.CHANNEL, enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
         try:
             from aiogram.enums import ChatMemberStatus
             member = await app.get_chat_member(chat_id, client.id)
