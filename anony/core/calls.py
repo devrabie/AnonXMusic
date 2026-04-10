@@ -180,37 +180,39 @@ class TgCall(PyTgCalls):
                     media.user,
                 )
                 keyboard = buttons.controls(chat_id)
-                if not message:
-                    return
-                try:
-                    if _thumb:
-                        from aiogram.types import InputMediaPhoto, FSInputFile
-                        # Aiogram edit_media needs different approach
-                        await message.edit_media(
-                            media=InputMediaPhoto(
-                                media=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
-                                caption=text,
-                            ),
-                            reply_markup=keyboard,
-                        )
-                    else:
-                        await message.edit_text(text, reply_markup=keyboard)
-                except Exception:
-                    if _thumb:
-                        from aiogram.types import FSInputFile
-                        sent = await app.send_photo(
-                            chat_id=chat_id,
-                            photo=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
-                            caption=text,
-                            reply_markup=keyboard,
-                        )
-                    else:
-                        sent = await app.send_message(
-                            chat_id=chat_id,
-                            text=text,
-                            reply_markup=keyboard,
-                        )
-                    media.message_id = sent.message_id
+
+                if message:
+                    try:
+                        if _thumb:
+                            from aiogram.types import InputMediaPhoto, FSInputFile
+                            await message.edit_media(
+                                media=InputMediaPhoto(
+                                    media=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
+                                    caption=text,
+                                ),
+                                reply_markup=keyboard,
+                            )
+                        else:
+                            await message.edit_text(text, reply_markup=keyboard)
+                        return
+                    except Exception:
+                        pass
+
+                if _thumb:
+                    from aiogram.types import FSInputFile
+                    sent = await app.send_photo(
+                        chat_id=chat_id,
+                        photo=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
+                        caption=text,
+                        reply_markup=keyboard,
+                    )
+                else:
+                    sent = await app.send_message(
+                        chat_id=chat_id,
+                        text=text,
+                        reply_markup=keyboard,
+                    )
+                media.message_id = sent.message_id
         except FileNotFoundError:
             if message:
                 await message.edit_text(_lang["error_no_file"].format(config.SUPPORT_CHAT))
@@ -239,6 +241,9 @@ class TgCall(PyTgCalls):
             return
 
         media = queue.get_current(chat_id)
+        if not media:
+            return
+
         _lang = await lang.get_lang(chat_id)
         msg = await app.send_message(chat_id=chat_id, text=_lang["play_again"])
         media.message_id = msg.message_id

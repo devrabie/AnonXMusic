@@ -17,6 +17,7 @@ class ManageChat(StatesGroup):
     entering_url = State()
     entering_chat_id = State()
     entering_tg_link = State()
+    entering_new_name = State()
 
 @dp.message(Command("manage", "dashboard"), F.chat.type == enums.ChatType.PRIVATE)
 async def _dashboard(m: types.Message, lang: dict):
@@ -178,6 +179,47 @@ async def _play_item(query: types.CallbackQuery, lang: dict):
 
     await _manage_playlist(query, lang)
 
+@dp.callback_query(F.data.regexp(r"rename_item (-?\d+) (\d+)"))
+async def _rename_item_prompt(query: types.CallbackQuery, state: FSMContext, lang: dict):
+    chat_id = int(query.data.split()[1])
+    idx = int(query.data.split()[2])
+    await state.update_data(chat_id=chat_id, idx=idx, last_msg=query.message.message_id)
+    await state.set_state(ManageChat.entering_new_name)
+    await query.message.edit_text(
+        lang["enter_new_name"],
+        reply_markup=buttons.cancel_markup(lang, f"manage_playlist {chat_id}")
+    )
+    await query.answer()
+
+@dp.message(ManageChat.entering_new_name)
+async def _process_new_name(m: types.Message, state: FSMContext, lang: dict):
+    data = await state.get_data()
+    chat_id = data.get("chat_id")
+    idx = data.get("idx")
+    new_name = m.text.strip()
+
+    q = queue.queues[chat_id]
+    if 0 <= idx < len(q):
+        q[idx].title = new_name
+        await m.reply(lang["name_updated"])
+
+    try:
+        await m.bot.delete_message(m.chat.id, data.get("last_msg"))
+    except:
+        pass
+
+    await state.clear()
+    # Return to playlist
+    from aiogram.types import CallbackQuery
+    mock_query = CallbackQuery(
+        id="0",
+        from_user=m.from_user,
+        chat_instance="0",
+        message=m,
+        data=f"manage_playlist {chat_id}"
+    )
+    await _manage_playlist(mock_query, lang)
+
 @dp.callback_query(F.data.regexp(r"set_url (-?\d+)"))
 async def _set_url_prompt(query: types.CallbackQuery, state: FSMContext, lang: dict):
     chat_id = int(query.data.split()[1])
@@ -185,7 +227,7 @@ async def _set_url_prompt(query: types.CallbackQuery, state: FSMContext, lang: d
     await state.set_state(ManageChat.entering_url)
     await query.message.edit_text(
         lang["enter_url"],
-        reply_markup=buttons.cancel_markup(lang)
+        reply_markup=buttons.cancel_markup(lang, f"manage_chat {chat_id}")
     )
     await query.answer()
 
@@ -226,7 +268,7 @@ async def _add_chat_manual_prompt(query: types.CallbackQuery, state: FSMContext,
     await state.set_state(ManageChat.entering_chat_id)
     await query.message.edit_text(
         lang["enter_chat_id"],
-        reply_markup=buttons.cancel_markup(lang)
+        reply_markup=buttons.cancel_markup(lang, "manage_chats")
     )
     await query.answer()
 
@@ -260,7 +302,7 @@ async def _add_local_prompt(query: types.CallbackQuery, state: FSMContext, lang:
     await state.set_state(ManageChat.entering_tg_link)
     await query.message.edit_text(
         lang["enter_telegram_link"],
-        reply_markup=buttons.cancel_markup(lang)
+        reply_markup=buttons.cancel_markup(lang, f"manage_playlist {chat_id}")
     )
     await query.answer()
 
@@ -279,6 +321,10 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
         # Associate with the user who added it
         media.user = m.from_user.mention_html()
         position = queue.add(chat_id, media)
+        if position == -2:
+             await sent.delete()
+             return await m.reply(lang["play_duplicate"])
+
         await m.reply(
             lang["play_queued"].format(
                 position,

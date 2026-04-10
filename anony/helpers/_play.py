@@ -71,6 +71,8 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
         await anon.stop(chat_id)
 
     position = queue.add(chat_id, media)
+    if position == -2:
+        return await m.reply(lang["play_duplicate"])
 
     if position == 0 and not await db.get_call(chat_id):
         if not await join_assistant(chat_id, lang, m):

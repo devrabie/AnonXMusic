@@ -201,5 +201,8 @@
     "play_chat_selection": "🎯 Please select the chat to play in:",
     "error_no_url": "❌ No stream URL set. Please set a URL first.",
     "yt_disabled": "❌ YouTube search/download is temporarily disabled. Please use public Telegram links.",
-    "play_started": "▶️ Started playing <b>{0}</b> in <code>{1}</code>."
+    "play_started": "▶️ Started playing <b>{0}</b> in <code>{1}</code>.",
+    "enter_new_name": "📝 Please enter the new name for the file:",
+    "name_updated": "✅ File name updated successfully.",
+    "play_duplicate": "⚠️ This file is already in the queue."
 }
