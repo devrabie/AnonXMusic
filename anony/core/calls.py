@@ -32,9 +32,9 @@ class TgCall(PyTgCalls):
     async def stop(self, chat_id: int) -> None:
         from anony import queue
         client = await db.get_assistant(chat_id)
-        queue.clear(chat_id)
+        await queue.clear(chat_id)
         await db.remove_call(chat_id)
-        await db.set_loop(chat_id, 0)
+        await db.set_loop(chat_id, False)
 
         try:
             await client.leave_call(chat_id, close=False)
@@ -146,7 +146,7 @@ class TgCall(PyTgCalls):
                 video_parameters=types.VideoQuality.HD_720p,
                 audio_flags=types.MediaStream.Flags.REQUIRED,
                 video_flags=(
-                    types.MediaStream.Flags.AUTO_DETECT
+                    types.MediaStream.Flags.REQUIRED
                     if video
                     else types.MediaStream.Flags.IGNORE
                 ),
@@ -158,7 +158,7 @@ class TgCall(PyTgCalls):
                 video_parameters=types.VideoQuality.HD_720p,
                 audio_flags=types.MediaStream.Flags.REQUIRED,
                 video_flags=(
-                    types.MediaStream.Flags.AUTO_DETECT
+                    types.MediaStream.Flags.REQUIRED
                     if media.video
                     else types.MediaStream.Flags.IGNORE
                 ),
@@ -260,11 +260,7 @@ class TgCall(PyTgCalls):
 
     async def play_next(self, chat_id: int) -> None:
         from anony import queue
-        if loop := await db.get_loop(chat_id):
-            await db.set_loop(chat_id, loop - 1)
-            return await self.replay(chat_id)
-
-        media = queue.get_next(chat_id)
+        media = await queue.get_next(chat_id)
         try:
             if media.message_id:
                 await app.delete_message(

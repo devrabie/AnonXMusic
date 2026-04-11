@@ -159,11 +159,12 @@ class Inline:
         builder.row(types.InlineKeyboardButton(text=_lang["back"], callback_data="start_back"))
         return builder.as_markup()
 
-    def stream_markup(self, _lang: dict, chat_id: int, status: bool, stype: str = "audio", source: str = "url") -> types.InlineKeyboardMarkup:
+    def stream_markup(self, _lang: dict, chat_id: int, status: bool, stype: str = "audio", source: str = "url", loop: bool = False) -> types.InlineKeyboardMarkup:
         builder = InlineKeyboardBuilder()
         builder.button(text=_lang["stream_status"] + (": ON" if status else ": OFF"), callback_data="none")
         builder.button(text=_lang["stream_type"] + (": 🎧" if stype == "audio" else ": 📺"), callback_data=f"toggle_stype {chat_id}")
         builder.button(text=_lang["stream_source"] + (": 🔗" if source == "url" else ": 📑"), callback_data=f"toggle_source {chat_id}")
+        builder.button(text=_lang["loop_status"] + (": ON" if loop else ": OFF"), callback_data=f"toggle_loop {chat_id}")
         builder.button(
             text=_lang["stop_stream"] if status else _lang["start_stream"],
             callback_data=f"toggle_stream {chat_id}",
@@ -172,7 +173,7 @@ class Inline:
         builder.button(text=_lang["add_local_media"], callback_data=f"add_local {chat_id}")
         builder.button(text=_lang["playlist_management"], callback_data=f"manage_playlist {chat_id}")
         builder.button(text=_lang["back"], callback_data="manage_chats")
-        builder.adjust(1, 2, 1, 2, 1, 1)
+        builder.adjust(1, 2, 2, 1, 2, 1, 1)
         return builder.as_markup()
 
     def playlist_markup(self, _lang: dict, chat_id: int, queue_list: list) -> types.InlineKeyboardMarkup:

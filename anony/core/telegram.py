@@ -55,7 +55,10 @@ class Telegram:
         file_size = getattr(media, "file_size", 0)
         file_title = getattr(media, "title", None) or getattr(media, "file_name", "Telegram File")
         duration = getattr(media, "duration", 0)
-        video = bool(getattr(media, "mime_type", "").startswith("video/"))
+        video = bool(
+            getattr(media, "mime_type", "").startswith("video/") or
+            (getattr(media, "file_name", "").lower().endswith((".mp4", ".mkv", ".mov", ".avi", ".webm")))
+        )
 
         if duration > config.DURATION_LIMIT:
             await sent.edit_text(_lang.get("play_duration_limit", "Limit").format(config.DURATION_LIMIT // 60))

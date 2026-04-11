@@ -50,6 +50,7 @@ class Database:
         await self.conn.execute("CREATE TABLE IF NOT EXISTS sudoers (user_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
         await self.conn.execute("CREATE TABLE IF NOT EXISTS sessions (name TEXT PRIMARY KEY, string TEXT)")
+        await self.conn.execute("CREATE TABLE IF NOT EXISTS queue (chat_id INTEGER, pos INTEGER, data TEXT, PRIMARY KEY(chat_id, pos))")
         await self._migrate_tables()
         await self.conn.commit()
 
@@ -82,6 +83,10 @@ class Database:
             await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_source TEXT DEFAULT 'url'")
         except Exception:
             pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN loop_status BOOLEAN DEFAULT 0")
+        except Exception:
+            pass
 
     async def close(self) -> None:
         if self.conn:
@@ -109,11 +114,64 @@ class Database:
             self.admin_list[chat_id] = await reload_admins(chat_id)
         return self.admin_list[chat_id]
 
-    async def get_loop(self, chat_id: int) -> int:
-        return self.loop.get(chat_id, 0)
+    async def get_loop(self, chat_id: int) -> bool:
+        async with self.conn.execute("SELECT loop_status FROM chats WHERE chat_id = ?", (chat_id,)) as cursor:
+            row = await cursor.fetchone()
+            return bool(row[0]) if row else False
 
-    async def set_loop(self, chat_id: int, count: int) -> None:
-        self.loop[chat_id] = count
+    async def set_loop(self, chat_id: int, status: bool) -> None:
+        await self.conn.execute("INSERT INTO chats (chat_id, loop_status) VALUES (?, ?) ON CONFLICT(chat_id) DO UPDATE SET loop_status = excluded.loop_status", (chat_id, status))
+        await self.conn.commit()
+
+    async def save_queue(self, chat_id: int, queue_list: list) -> None:
+        import json
+        await self.conn.execute("DELETE FROM queue WHERE chat_id = ?", (chat_id,))
+        for i, item in enumerate(queue_list):
+            data = {
+                "id": item.id,
+                "title": item.title,
+                "duration": item.duration,
+                "file_path": item.file_path,
+                "url": item.url,
+                "video": item.video,
+                "user": getattr(item, "user", "System"),
+                "duration_sec": getattr(item, "duration_sec", 0),
+                "type": "Track" if hasattr(item, "thumbnail") else "Media"
+            }
+            await self.conn.execute("INSERT INTO queue (chat_id, pos, data) VALUES (?, ?, ?)", (chat_id, i, json.dumps(data)))
+        await self.conn.commit()
+
+    async def load_queue(self, chat_id: int) -> list:
+        import json
+        from anony.helpers import Media, Track
+        async with self.conn.execute("SELECT data FROM queue WHERE chat_id = ? ORDER BY pos", (chat_id,)) as cursor:
+            rows = await cursor.fetchall()
+            queue = []
+            for row in rows:
+                data = json.loads(row[0])
+                if data["type"] == "Track":
+                    item = Track(
+                        id=data["id"],
+                        title=data["title"],
+                        duration=data["duration"],
+                        url=data["url"],
+                        file_path=data["file_path"],
+                        video=data["video"],
+                        user=data["user"]
+                    )
+                else:
+                    item = Media(
+                        id=data["id"],
+                        duration=data["duration"],
+                        file_path=data["file_path"],
+                        url=data["url"],
+                        title=data["title"],
+                        video=data["video"]
+                    )
+                    item.user = data["user"]
+                    item.duration_sec = data["duration_sec"]
+                queue.append(item)
+            return queue
 
     # AUTH METHODS
     async def _get_auth(self, chat_id: int) -> set[int]:
@@ -405,8 +463,16 @@ class Database:
         await self.conn.commit()
 
     async def load_cache(self) -> None:
+        from anony import queue
         await self.get_chats()
         await self.get_users()
         await self.get_blacklisted(True)
         await self.get_logger()
+
+        # Load active queues
+        for chat_id in self.chats:
+            q_list = await self.load_queue(chat_id)
+            if q_list:
+                queue.queues[chat_id].extend(q_list)
+
         logger.info("Database cache loaded.")

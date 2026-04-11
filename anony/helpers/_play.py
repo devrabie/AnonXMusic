@@ -70,7 +70,7 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
     if force:
         await anon.stop(chat_id)
 
-    position = queue.add(chat_id, media)
+    position = await queue.add(chat_id, media)
     if position == -2:
         return await m.reply(lang["play_duplicate"])
 

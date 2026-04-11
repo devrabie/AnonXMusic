@@ -67,6 +67,7 @@ async def _manage_chats_cb(query: types.CallbackQuery, lang: dict):
 async def _manage_chat(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
     url, status, stype, source = await db.get_stream(chat_id)
+    loop = await db.get_loop(chat_id)
 
     # Check if currently playing
     is_playing = await db.get_call(chat_id)
@@ -74,7 +75,7 @@ async def _manage_chat(query: types.CallbackQuery, lang: dict):
     if is_playing:
         keyboard = buttons.controls(chat_id)
     else:
-        keyboard = buttons.stream_markup(lang, chat_id, status, stype, source)
+        keyboard = buttons.stream_markup(lang, chat_id, status, stype, source, loop)
 
     await query.message.edit_text(
         text=lang["stream_settings"].format(chat_id),
@@ -97,6 +98,13 @@ async def _toggle_source(query: types.CallbackQuery, lang: dict):
 
     new_source = "playlist" if source == "url" else "url"
     await db.set_stream(chat_id, source=new_source)
+    await _manage_chat(query, lang)
+
+@dp.callback_query(F.data.regexp(r"toggle_loop (-?\d+)"))
+async def _toggle_loop(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    loop = await db.get_loop(chat_id)
+    await db.set_loop(chat_id, not loop)
     await _manage_chat(query, lang)
 
 @dp.callback_query(F.data.regexp(r"toggle_stream (-?\d+)"))
@@ -146,7 +154,7 @@ async def _manage_playlist(query: types.CallbackQuery, lang: dict):
 @dp.callback_query(F.data.regexp(r"clear_queue (-?\d+)"))
 async def _clear_queue(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
-    queue.clear(chat_id)
+    await queue.clear(chat_id)
     await query.answer(lang["queue_cleared"])
     await _manage_playlist(query, lang)
 
@@ -326,7 +334,7 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
 
         # Associate with the user who added it
         media.user = m.from_user.mention_html()
-        position = queue.add(chat_id, media)
+        position = await queue.add(chat_id, media)
         if position == -2:
              await sent.delete()
              return await m.reply(lang["play_duplicate"])

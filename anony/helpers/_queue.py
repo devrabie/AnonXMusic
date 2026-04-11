@@ -3,6 +3,7 @@
 # This file is part of AnonXMusic
 
 
+import asyncio
 from collections import defaultdict, deque
 from typing import Union
 
@@ -15,7 +16,11 @@ class Queue:
     def __init__(self):
         self.queues: dict[int, deque[MediaItem]] = defaultdict(deque)
 
-    def add(self, chat_id: int, item: MediaItem) -> int:
+    async def _save(self, chat_id: int):
+        from anony import db
+        await db.save_queue(chat_id, list(self.queues[chat_id]))
+
+    async def add(self, chat_id: int, item: MediaItem) -> int:
         """Add an item to the queue and return its position (1-based)."""
         # Avoid duplicates by id
         for existing in self.queues[chat_id]:
@@ -23,6 +28,7 @@ class Queue:
                 return -2 # Custom code for duplicate
 
         self.queues[chat_id].append(item)
+        await self._save(chat_id)
         return len(self.queues[chat_id]) - 1
 
     def check_item(self, chat_id: int, item_id: str) -> tuple[int, MediaItem | None]:
@@ -37,40 +43,49 @@ class Queue:
         )
         return pos, track
 
-    def force_add(
+    async def force_add(
         self, chat_id: int, item: MediaItem, remove: int | bool = False
     ) -> None:
         """Replace the currently playing item with a new one."""
-        self.remove_current(chat_id)
+        await self.remove_current(chat_id)
         self.queues[chat_id].appendleft(item)
         if remove:
             self.queues[chat_id].rotate(-remove)
             self.queues[chat_id].popleft()
             self.queues[chat_id].rotate(remove)
+        await self._save(chat_id)
 
     def get_current(self, chat_id: int) -> MediaItem | None:
         """Return the currently playing item (first in queue), if any."""
         return self.queues[chat_id][0] if self.queues[chat_id] else None
 
-    def get_next(self, chat_id: int, check: bool = False) -> MediaItem | None:
+    async def get_next(self, chat_id: int, check: bool = False) -> MediaItem | None:
         """Remove current item and return the next one, or None if empty."""
         if not self.queues[chat_id]:
             return None
         if check:
             return self.queues[chat_id][1] if len(self.queues[chat_id]) > 1 else None
 
-        self.queues[chat_id].popleft()
+        from anony import db
+        if await db.get_loop(chat_id):
+            self.queues[chat_id].rotate(-1)
+        else:
+            self.queues[chat_id].popleft()
+
+        await self._save(chat_id)
         return self.queues[chat_id][0] if self.queues[chat_id] else None
 
     def get_queue(self, chat_id: int) -> list[MediaItem]:
         """Return the full queue including the currently playing item."""
         return list(self.queues[chat_id])
 
-    def remove_current(self, chat_id: int) -> None:
+    async def remove_current(self, chat_id: int) -> None:
         """Remove the currently playing item only (if exists)."""
         if self.queues[chat_id]:
             self.queues[chat_id].popleft()
+            await self._save(chat_id)
 
-    def clear(self, chat_id: int) -> None:
+    async def clear(self, chat_id: int) -> None:
         """Clear the entire queue."""
         self.queues[chat_id].clear()
+        await self._save(chat_id)
