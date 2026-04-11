@@ -75,6 +75,21 @@ class Queue:
         await self._save(chat_id)
         return self.queues[chat_id][0] if self.queues[chat_id] else None
 
+    async def get_prev(self, chat_id: int) -> MediaItem | None:
+        """Rotate the queue backward and return the 'new' current item."""
+        if not self.queues[chat_id]:
+            return None
+
+        from anony import db
+        # We always rotate for prev if loop is on, or even if not, we can rotate back
+        # but if loop is off, the head was already popped.
+        # However, the user wants to "flip through files from the playlist".
+        # So rotating is the correct "flipping" behavior.
+        self.queues[chat_id].rotate(1)
+
+        await self._save(chat_id)
+        return self.queues[chat_id][0]
+
     def get_queue(self, chat_id: int) -> list[MediaItem]:
         """Return the full queue including the currently playing item."""
         return list(self.queues[chat_id])

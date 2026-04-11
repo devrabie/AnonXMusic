@@ -25,6 +25,7 @@ class Inline:
         status: str = None,
         timer: str = None,
         remove: bool = False,
+        is_paused: bool = False,
     ) -> types.InlineKeyboardMarkup:
         builder = InlineKeyboardBuilder()
         if status:
@@ -35,16 +36,21 @@ class Inline:
             builder.adjust(1)
 
         if not remove:
-            builder.button(text="▷", callback_data=f"controls resume {chat_id}")
-            builder.button(text="II", callback_data=f"controls pause {chat_id}")
+            builder.button(text="«", callback_data=f"controls prev {chat_id}")
+            if is_paused:
+                builder.button(text="▷", callback_data=f"controls resume {chat_id}")
+            else:
+                builder.button(text="II", callback_data=f"controls pause {chat_id}")
+            builder.button(text="»", callback_data=f"controls skip {chat_id}")
+            builder.adjust(3)
+
             builder.button(text="⥁", callback_data=f"controls replay {chat_id}")
-            builder.button(text="‣‣I", callback_data=f"controls skip {chat_id}")
             builder.button(text="▢", callback_data=f"controls stop {chat_id}")
-            builder.adjust(5 if not (status or timer) else 1, 5)
+            builder.adjust(3, 2)
 
         builder.button(text="📑 Playlist", callback_data=f"manage_playlist {chat_id}")
         builder.button(text="📊 Dashboard", callback_data="manage_chats")
-        builder.adjust(1) if remove else None
+        builder.adjust(1) if remove else builder.adjust(3, 2, 2)
 
         return builder.as_markup()
 
@@ -184,6 +190,7 @@ class Inline:
             builder.button(text="🗑️", callback_data=f"del_item {chat_id} {i}")
 
         builder.adjust(3)
+        builder.row(types.InlineKeyboardButton(text=_lang["add_local_media"], callback_data=f"add_local {chat_id}"))
         builder.row(types.InlineKeyboardButton(text=_lang["clear_queue"], callback_data=f"clear_queue {chat_id}"))
         builder.row(types.InlineKeyboardButton(text=_lang["back"], callback_data=f"manage_chat {chat_id}"))
         return builder.as_markup()
@@ -210,4 +217,11 @@ class Inline:
         builder = InlineKeyboardBuilder()
         # builder.button(text="❐", copy_text=link) # aiogram might need different way for copy_text if supported
         builder.button(text="Youtube", url=link)
+        return builder.as_markup()
+
+    def added_media_markup(self, _lang: dict, chat_id: int) -> types.InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        builder.button(text=_lang["playlist_management"], callback_data=f"manage_playlist {chat_id}")
+        builder.button(text=_lang["back"], callback_data=f"manage_chat {chat_id}")
+        builder.adjust(1)
         return builder.as_markup()

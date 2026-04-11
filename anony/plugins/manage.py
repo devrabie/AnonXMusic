@@ -73,7 +73,8 @@ async def _manage_chat(query: types.CallbackQuery, lang: dict):
     is_playing = await db.get_call(chat_id)
 
     if is_playing:
-        keyboard = buttons.controls(chat_id)
+        is_paused = await db.is_paused(chat_id)
+        keyboard = buttons.controls(chat_id, is_paused=is_paused)
     else:
         keyboard = buttons.stream_markup(lang, chat_id, status, stype, source, loop)
 
@@ -347,13 +348,14 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
             await m.reply(lang["play_started"].format(html.escape(media.title), chat_id))
         else:
             await m.reply(
-                lang["play_queued"].format(
+            text=lang["play_queued"].format(
                     position + 1,
                     media.url or "#",
                     html.escape(media.title),
                     media.duration,
                     m.from_user.mention_html(),
                 ),
+            reply_markup=buttons.added_media_markup(lang, chat_id),
                 disable_web_page_preview=True
             )
         await sent.delete()

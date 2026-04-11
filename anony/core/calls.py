@@ -179,7 +179,8 @@ class TgCall(PyTgCalls):
                     media.duration,
                     media.user,
                 )
-                keyboard = buttons.controls(chat_id)
+                is_paused = await db.is_paused(chat_id)
+                keyboard = buttons.controls(chat_id, is_paused=is_paused)
 
                 if message:
                     try:
@@ -254,6 +255,36 @@ class TgCall(PyTgCalls):
 
         _lang = await lang.get_lang(chat_id)
         msg = await app.send_message(chat_id=chat_id, text=_lang["play_again"])
+        media.message_id = msg.message_id
+        await self.play_media(chat_id, msg, media)
+
+
+    async def play_prev(self, chat_id: int) -> None:
+        from anony import queue
+        media = await queue.get_prev(chat_id)
+        try:
+            if media and media.message_id:
+                await app.delete_message(
+                    chat_id=chat_id,
+                    message_id=media.message_id,
+                )
+                media.message_id = 0
+        except Exception:
+            pass
+
+        if not media:
+            return await self.stop(chat_id)
+
+        _lang = await lang.get_lang(chat_id)
+        msg = await app.send_message(chat_id=chat_id, text=_lang["play_next"])
+        if not media.file_path:
+            media.file_path = await yt.download(media.id, video=media.video)
+            if not media.file_path:
+                await self.play_next(chat_id)
+                return await msg.edit_text(
+                    _lang["error_no_file"].format(config.SUPPORT_CHAT)
+                )
+
         media.message_id = msg.message_id
         await self.play_media(chat_id, msg, media)
 
