@@ -38,7 +38,11 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
             # We need the pyrogram message object. We can try to get it by ID
             # But the assistant might not be in the chat where the reply is.
             # Usually, for replies, we assume it's in the same chat.
-            p_msg = await client.get_messages(m.chat.id, m.reply_to_message.message_id)
+            try:
+                p_msg = await client.get_messages(m.chat.id, m.reply_to_message.message_id)
+            except Exception:
+                fwd = await m.reply_to_message.forward(client.id)
+                p_msg = await client.get_messages(client.id, fwd.message_id)
             media = await tg.download(p_msg, sent, lang)
         except Exception as e:
             return await sent.edit_text(f"Error: {e}")
@@ -70,7 +74,7 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
     if force:
         await anon.stop(chat_id)
 
-    position = queue.add(chat_id, media)
+    position = await queue.add(chat_id, media)
     if position == -2:
         return await m.reply(lang["play_duplicate"])
 
@@ -83,7 +87,7 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
     else:
         await m.reply(
             lang["play_queued"].format(
-                position,
+                position + 1,
                 media.url or "#",
                 html.escape(media.title),
                 media.duration,

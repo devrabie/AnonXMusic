@@ -32,9 +32,9 @@ class TgCall(PyTgCalls):
     async def stop(self, chat_id: int) -> None:
         from anony import queue
         client = await db.get_assistant(chat_id)
-        queue.clear(chat_id)
+        await queue.clear(chat_id)
         await db.remove_call(chat_id)
-        await db.set_loop(chat_id, 0)
+        await db.set_loop(chat_id, False)
 
         try:
             await client.leave_call(chat_id, close=False)
@@ -146,7 +146,7 @@ class TgCall(PyTgCalls):
                 video_parameters=types.VideoQuality.HD_720p,
                 audio_flags=types.MediaStream.Flags.REQUIRED,
                 video_flags=(
-                    types.MediaStream.Flags.AUTO_DETECT
+                    types.MediaStream.Flags.REQUIRED
                     if video
                     else types.MediaStream.Flags.IGNORE
                 ),
@@ -158,7 +158,7 @@ class TgCall(PyTgCalls):
                 video_parameters=types.VideoQuality.HD_720p,
                 audio_flags=types.MediaStream.Flags.REQUIRED,
                 video_flags=(
-                    types.MediaStream.Flags.AUTO_DETECT
+                    types.MediaStream.Flags.REQUIRED
                     if media.video
                     else types.MediaStream.Flags.IGNORE
                 ),
@@ -179,15 +179,20 @@ class TgCall(PyTgCalls):
                     media.duration,
                     media.user,
                 )
-                keyboard = buttons.controls(chat_id)
+                is_paused = await db.is_paused(chat_id)
+                keyboard = buttons.controls(chat_id, is_paused=is_paused)
 
                 if message:
                     try:
                         if _thumb:
-                            from aiogram.types import InputMediaPhoto, FSInputFile
+                            from aiogram.types import InputMediaPhoto, FSInputFile, URLInputFile
+                            if isinstance(_thumb, str):
+                                _input_thumb = URLInputFile(_thumb) if _thumb.startswith("http") else FSInputFile(_thumb)
+                            else:
+                                _input_thumb = _thumb
                             await message.edit_media(
                                 media=InputMediaPhoto(
-                                    media=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
+                                    media=_input_thumb,
                                     caption=text,
                                 ),
                                 reply_markup=keyboard,
@@ -199,10 +204,14 @@ class TgCall(PyTgCalls):
                         pass
 
                 if _thumb:
-                    from aiogram.types import FSInputFile
+                    from aiogram.types import FSInputFile, URLInputFile
+                    if isinstance(_thumb, str):
+                        _input_thumb = URLInputFile(_thumb) if _thumb.startswith("http") else FSInputFile(_thumb)
+                    else:
+                        _input_thumb = _thumb
                     sent = await app.send_photo(
                         chat_id=chat_id,
-                        photo=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
+                        photo=_input_thumb,
                         caption=text,
                         reply_markup=keyboard,
                     )
@@ -250,13 +259,39 @@ class TgCall(PyTgCalls):
         await self.play_media(chat_id, msg, media)
 
 
+    async def play_prev(self, chat_id: int) -> None:
+        from anony import queue
+        media = await queue.get_prev(chat_id)
+        try:
+            if media and media.message_id:
+                await app.delete_message(
+                    chat_id=chat_id,
+                    message_id=media.message_id,
+                )
+                media.message_id = 0
+        except Exception:
+            pass
+
+        if not media:
+            return await self.stop(chat_id)
+
+        _lang = await lang.get_lang(chat_id)
+        msg = await app.send_message(chat_id=chat_id, text=_lang["play_next"])
+        if not media.file_path:
+            media.file_path = await yt.download(media.id, video=media.video)
+            if not media.file_path:
+                await self.play_next(chat_id)
+                return await msg.edit_text(
+                    _lang["error_no_file"].format(config.SUPPORT_CHAT)
+                )
+
+        media.message_id = msg.message_id
+        await self.play_media(chat_id, msg, media)
+
+
     async def play_next(self, chat_id: int) -> None:
         from anony import queue
-        if loop := await db.get_loop(chat_id):
-            await db.set_loop(chat_id, loop - 1)
-            return await self.replay(chat_id)
-
-        media = queue.get_next(chat_id)
+        media = await queue.get_next(chat_id)
         try:
             if media.message_id:
                 await app.delete_message(

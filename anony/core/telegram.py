@@ -53,9 +53,12 @@ class Telegram:
         file_id = getattr(media, "file_unique_id", None)
         file_ext = getattr(media, "file_name", "").split(".")[-1]
         file_size = getattr(media, "file_size", 0)
-        file_title = getattr(media, "title", "Telegram File") or "Telegram File"
+        file_title = getattr(media, "title", None) or getattr(media, "file_name", "Telegram File")
         duration = getattr(media, "duration", 0)
-        video = bool(getattr(media, "mime_type", "").startswith("video/"))
+        video = bool(
+            getattr(media, "mime_type", "").startswith("video/") or
+            (getattr(media, "file_name", "").lower().endswith((".mp4", ".mkv", ".mov", ".avi", ".webm")))
+        )
 
         if duration > config.DURATION_LIMIT:
             await sent.edit_text(_lang.get("play_duration_limit", "Limit").format(config.DURATION_LIMIT // 60))
@@ -115,7 +118,7 @@ class Telegram:
                 file_path=file_path,
                 message_id=msg_id,
                 url=msg.link,
-                title=file_title[:25],
+                title=file_title,
                 video=video,
             )
         except asyncio.CancelledError:

@@ -67,6 +67,9 @@ async def _controls_cb(query: types.CallbackQuery, lang: dict):
     elif action == "skip":
         await anon.play_next(chat_id)
         await query.answer(lang["skipped"])
+    elif action == "prev":
+        await anon.play_prev(chat_id)
+        await query.answer(lang["playing"])
     elif action == "replay":
         await anon.replay(chat_id)
         await query.answer(lang["replayed"])

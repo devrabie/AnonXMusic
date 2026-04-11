@@ -58,28 +58,36 @@ async def _manage_chats_cb(query: types.CallbackQuery, lang: dict):
         except Exception:
             continue
 
-    await query.message.edit_text(
-        text=lang["manage_chats"],
-        reply_markup=buttons.dashboard_markup(lang, chat_list)
-    )
+    try:
+        await query.message.edit_text(
+            text=lang["manage_chats"],
+            reply_markup=buttons.dashboard_markup(lang, chat_list)
+        )
+    except Exception:
+        pass
 
 @dp.callback_query(F.data.regexp(r"manage_chat (-?\d+)"))
 async def _manage_chat(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
     url, status, stype, source = await db.get_stream(chat_id)
+    loop = await db.get_loop(chat_id)
 
     # Check if currently playing
     is_playing = await db.get_call(chat_id)
 
     if is_playing:
-        keyboard = buttons.controls(chat_id)
+        is_paused = await db.is_paused(chat_id)
+        keyboard = buttons.controls(chat_id, is_paused=is_paused)
     else:
-        keyboard = buttons.stream_markup(lang, chat_id, status, stype, source)
+        keyboard = buttons.stream_markup(lang, chat_id, status, stype, source, loop)
 
-    await query.message.edit_text(
-        text=lang["stream_settings"].format(chat_id),
-        reply_markup=keyboard
-    )
+    try:
+        await query.message.edit_text(
+            text=lang["stream_settings"].format(chat_id),
+            reply_markup=keyboard
+        )
+    except Exception:
+        pass
 
 @dp.callback_query(F.data.regexp(r"toggle_stype (-?\d+)"))
 async def _toggle_stype(query: types.CallbackQuery, lang: dict):
@@ -97,6 +105,13 @@ async def _toggle_source(query: types.CallbackQuery, lang: dict):
 
     new_source = "playlist" if source == "url" else "url"
     await db.set_stream(chat_id, source=new_source)
+    await _manage_chat(query, lang)
+
+@dp.callback_query(F.data.regexp(r"toggle_loop (-?\d+)"))
+async def _toggle_loop(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    loop = await db.get_loop(chat_id)
+    await db.set_loop(chat_id, not loop)
     await _manage_chat(query, lang)
 
 @dp.callback_query(F.data.regexp(r"toggle_stream (-?\d+)"))
@@ -117,7 +132,13 @@ async def _toggle_stream(query: types.CallbackQuery, lang: dict):
                 return await query.answer(f"Error: {e}", show_alert=True)
         else:
             try:
-                await anon.play_next(chat_id)
+                media = queue.get_current(chat_id)
+                if media:
+                    if not await join_assistant(chat_id, lang, query.message):
+                        return
+                    await anon.play_media(chat_id, None, media)
+                else:
+                    return await query.answer(lang["error_no_playlist"], show_alert=True)
             except Exception as e:
                 return await query.answer(f"Error: {e}", show_alert=True)
     else:
@@ -132,15 +153,18 @@ async def _toggle_stream(query: types.CallbackQuery, lang: dict):
 async def _manage_playlist(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
     queue_list = queue.get_queue(chat_id)
-    await query.message.edit_text(
-        text=lang["playlist_management"],
-        reply_markup=buttons.playlist_markup(lang, chat_id, queue_list)
-    )
+    try:
+        await query.message.edit_text(
+            text=lang["playlist_management"],
+            reply_markup=buttons.playlist_markup(lang, chat_id, queue_list)
+        )
+    except Exception:
+        pass
 
 @dp.callback_query(F.data.regexp(r"clear_queue (-?\d+)"))
 async def _clear_queue(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
-    queue.clear(chat_id)
+    await queue.clear(chat_id)
     await query.answer(lang["queue_cleared"])
     await _manage_playlist(query, lang)
 
@@ -302,7 +326,8 @@ async def _add_local_prompt(query: types.CallbackQuery, state: FSMContext, lang:
     await state.set_state(ManageChat.entering_tg_link)
     await query.message.edit_text(
         lang["enter_telegram_link"],
-        reply_markup=buttons.cancel_markup(lang, f"manage_playlist {chat_id}")
+        reply_markup=buttons.cancel_markup(lang, f"manage_playlist {chat_id}"),
+        disable_web_page_preview=True
     )
     await query.answer()
 
@@ -310,31 +335,58 @@ async def _add_local_prompt(query: types.CallbackQuery, state: FSMContext, lang:
 async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
     data = await state.get_data()
     chat_id = data.get("chat_id")
-    link = m.text.strip()
 
     try:
         sent = await m.reply(lang["play_searching"])
-        media = await tg.get_from_link(link, sent, lang)
+        if m.text:
+            link = m.text.strip()
+            media = await tg.get_from_link(link, sent, lang)
+        elif m.audio or m.video or m.document:
+            # Bridge aiogram and pyrogram for download via assistant
+            from anony import userbot
+            client = userbot.clients[0] if userbot.clients else None
+            if not client:
+                 return await sent.edit_text(lang["play_no_assistant"])
+
+            # Forward to assistant's PM to resolve PEER_ID_INVALID in private chat
+            try:
+                p_msg = await client.get_messages(m.chat.id, m.message_id)
+            except Exception:
+                fwd = await m.forward(client.id)
+                p_msg = await client.get_messages(client.id, fwd.message_id)
+
+            media = await tg.download(p_msg, sent, lang)
+        else:
+            return await sent.edit_text(lang["invalid_telegram_link"])
+
         if not media:
              return await sent.edit_text(lang["play_not_found"].format(config.SUPPORT_CHAT))
 
         # Associate with the user who added it
         media.user = m.from_user.mention_html()
-        position = queue.add(chat_id, media)
+        position = await queue.add(chat_id, media)
         if position == -2:
              await sent.delete()
              return await m.reply(lang["play_duplicate"])
 
-        await m.reply(
-            lang["play_queued"].format(
-                position,
-                media.url or "#",
-                html.escape(media.title),
-                media.duration,
-                m.from_user.mention_html(),
-            ),
-            disable_web_page_preview=True
-        )
+        url, status, stype, source = await db.get_stream(chat_id)
+        if status and position == 0 and not await db.get_call(chat_id):
+            if not await join_assistant(chat_id, lang, m):
+                return
+            await anon.play_media(chat_id, None, media)
+            await m.reply(lang["play_started"].format(html.escape(media.title), chat_id))
+        else:
+            await m.reply(
+            text=lang["play_queued"].format(
+                    position + 1,
+                    media.url or "#",
+                    html.escape(media.title),
+                    media.duration,
+                    m.from_user.mention_html(),
+                ),
+            reply_markup=buttons.added_media_markup(lang, chat_id),
+                disable_web_page_preview=True
+            )
         await sent.delete()
 
         try:
