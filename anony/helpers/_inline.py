@@ -42,6 +42,7 @@ class Inline:
             builder.button(text="▢", callback_data=f"controls stop {chat_id}")
             builder.adjust(5 if not (status or timer) else 1, 5)
 
+        builder.button(text="📑 Playlist", callback_data=f"manage_playlist {chat_id}")
         builder.button(text="📊 Dashboard", callback_data="manage_chats")
         builder.adjust(1) if remove else None
 

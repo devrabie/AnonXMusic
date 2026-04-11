@@ -117,7 +117,13 @@ async def _toggle_stream(query: types.CallbackQuery, lang: dict):
                 return await query.answer(f"Error: {e}", show_alert=True)
         else:
             try:
-                await anon.play_next(chat_id)
+                media = queue.get_current(chat_id)
+                if media:
+                    if not await join_assistant(chat_id, lang, query.message):
+                        return
+                    await anon.play_media(chat_id, None, media)
+                else:
+                    return await query.answer(lang["error_no_playlist"], show_alert=True)
             except Exception as e:
                 return await query.answer(f"Error: {e}", show_alert=True)
     else:
@@ -325,16 +331,23 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
              await sent.delete()
              return await m.reply(lang["play_duplicate"])
 
-        await m.reply(
-            lang["play_queued"].format(
-                position,
-                media.url or "#",
-                html.escape(media.title),
-                media.duration,
-                m.from_user.mention_html(),
-            ),
-            disable_web_page_preview=True
-        )
+        url, status, stype, source = await db.get_stream(chat_id)
+        if status and position == 0 and not await db.get_call(chat_id):
+            if not await join_assistant(chat_id, lang, m):
+                return
+            await anon.play_media(chat_id, None, media)
+            await m.reply(lang["play_started"].format(html.escape(media.title), chat_id))
+        else:
+            await m.reply(
+                lang["play_queued"].format(
+                    position + 1,
+                    media.url or "#",
+                    html.escape(media.title),
+                    media.duration,
+                    m.from_user.mention_html(),
+                ),
+                disable_web_page_preview=True
+            )
         await sent.delete()
 
         try:

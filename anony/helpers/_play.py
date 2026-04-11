@@ -83,7 +83,7 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
     else:
         await m.reply(
             lang["play_queued"].format(
-                position,
+                position + 1,
                 media.url or "#",
                 html.escape(media.title),
                 media.duration,
