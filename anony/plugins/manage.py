@@ -317,7 +317,8 @@ async def _add_local_prompt(query: types.CallbackQuery, state: FSMContext, lang:
     await state.set_state(ManageChat.entering_tg_link)
     await query.message.edit_text(
         lang["enter_telegram_link"],
-        reply_markup=buttons.cancel_markup(lang, f"manage_playlist {chat_id}")
+        reply_markup=buttons.cancel_markup(lang, f"manage_playlist {chat_id}"),
+        disable_web_page_preview=True
     )
     await query.answer()
 
@@ -325,11 +326,24 @@ async def _add_local_prompt(query: types.CallbackQuery, state: FSMContext, lang:
 async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
     data = await state.get_data()
     chat_id = data.get("chat_id")
-    link = m.text.strip()
 
     try:
         sent = await m.reply(lang["play_searching"])
-        media = await tg.get_from_link(link, sent, lang)
+        if m.text:
+            link = m.text.strip()
+            media = await tg.get_from_link(link, sent, lang)
+        elif m.audio or m.video or m.document:
+            # Bridge aiogram and pyrogram for download via assistant
+            from anony import userbot
+            client = userbot.clients[0] if userbot.clients else None
+            if not client:
+                 return await sent.edit_text(lang["play_no_assistant"])
+
+            p_msg = await client.get_messages(m.chat.id, m.message_id)
+            media = await tg.download(p_msg, sent, lang)
+        else:
+            return await sent.edit_text(lang["invalid_telegram_link"])
+
         if not media:
              return await sent.edit_text(lang["play_not_found"].format(config.SUPPORT_CHAT))
 
