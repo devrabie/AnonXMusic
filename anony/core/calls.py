@@ -184,10 +184,14 @@ class TgCall(PyTgCalls):
                 if message:
                     try:
                         if _thumb:
-                            from aiogram.types import InputMediaPhoto, FSInputFile
+                            from aiogram.types import InputMediaPhoto, FSInputFile, URLInputFile
+                            if isinstance(_thumb, str):
+                                _input_thumb = URLInputFile(_thumb) if _thumb.startswith("http") else FSInputFile(_thumb)
+                            else:
+                                _input_thumb = _thumb
                             await message.edit_media(
                                 media=InputMediaPhoto(
-                                    media=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
+                                    media=_input_thumb,
                                     caption=text,
                                 ),
                                 reply_markup=keyboard,
@@ -199,10 +203,14 @@ class TgCall(PyTgCalls):
                         pass
 
                 if _thumb:
-                    from aiogram.types import FSInputFile
+                    from aiogram.types import FSInputFile, URLInputFile
+                    if isinstance(_thumb, str):
+                        _input_thumb = URLInputFile(_thumb) if _thumb.startswith("http") else FSInputFile(_thumb)
+                    else:
+                        _input_thumb = _thumb
                     sent = await app.send_photo(
                         chat_id=chat_id,
-                        photo=FSInputFile(_thumb) if isinstance(_thumb, str) else _thumb,
+                        photo=_input_thumb,
                         caption=text,
                         reply_markup=keyboard,
                     )
