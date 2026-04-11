@@ -58,10 +58,13 @@ async def _manage_chats_cb(query: types.CallbackQuery, lang: dict):
         except Exception:
             continue
 
-    await query.message.edit_text(
-        text=lang["manage_chats"],
-        reply_markup=buttons.dashboard_markup(lang, chat_list)
-    )
+    try:
+        await query.message.edit_text(
+            text=lang["manage_chats"],
+            reply_markup=buttons.dashboard_markup(lang, chat_list)
+        )
+    except Exception:
+        pass
 
 @dp.callback_query(F.data.regexp(r"manage_chat (-?\d+)"))
 async def _manage_chat(query: types.CallbackQuery, lang: dict):
@@ -78,10 +81,13 @@ async def _manage_chat(query: types.CallbackQuery, lang: dict):
     else:
         keyboard = buttons.stream_markup(lang, chat_id, status, stype, source, loop)
 
-    await query.message.edit_text(
-        text=lang["stream_settings"].format(chat_id),
-        reply_markup=keyboard
-    )
+    try:
+        await query.message.edit_text(
+            text=lang["stream_settings"].format(chat_id),
+            reply_markup=keyboard
+        )
+    except Exception:
+        pass
 
 @dp.callback_query(F.data.regexp(r"toggle_stype (-?\d+)"))
 async def _toggle_stype(query: types.CallbackQuery, lang: dict):
@@ -147,10 +153,13 @@ async def _toggle_stream(query: types.CallbackQuery, lang: dict):
 async def _manage_playlist(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
     queue_list = queue.get_queue(chat_id)
-    await query.message.edit_text(
-        text=lang["playlist_management"],
-        reply_markup=buttons.playlist_markup(lang, chat_id, queue_list)
-    )
+    try:
+        await query.message.edit_text(
+            text=lang["playlist_management"],
+            reply_markup=buttons.playlist_markup(lang, chat_id, queue_list)
+        )
+    except Exception:
+        pass
 
 @dp.callback_query(F.data.regexp(r"clear_queue (-?\d+)"))
 async def _clear_queue(query: types.CallbackQuery, lang: dict):
@@ -339,7 +348,13 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
             if not client:
                  return await sent.edit_text(lang["play_no_assistant"])
 
-            p_msg = await client.get_messages(m.chat.id, m.message_id)
+            # Forward to assistant's PM to resolve PEER_ID_INVALID in private chat
+            try:
+                p_msg = await client.get_messages(m.chat.id, m.message_id)
+            except Exception:
+                fwd = await m.forward(client.id)
+                p_msg = await client.get_messages(client.id, fwd.message_id)
+
             media = await tg.download(p_msg, sent, lang)
         else:
             return await sent.edit_text(lang["invalid_telegram_link"])
