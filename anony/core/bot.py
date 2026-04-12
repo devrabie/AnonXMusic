@@ -30,6 +30,13 @@ class Bot(AiogramBot):
         self.sudoers = [int(self.owner)]
 
     @property
+    def id(self):
+        try:
+            return self._id
+        except AttributeError:
+            return super().id
+
+    @property
     def name(self):
         return self._me.first_name
 
@@ -46,7 +53,7 @@ class Bot(AiogramBot):
         Starts the bot and performs initial setup.
         """
         self._me = await self.get_me()
-        self.id = self._me.id
+        self._id = self._me.id
 
         if config.API_SERVER:
             logger.info(f"Using Local API Server: {config.API_SERVER}")
