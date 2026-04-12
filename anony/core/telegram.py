@@ -141,12 +141,10 @@ class Telegram:
 
                 if is_aiogram:
                     # Aiogram download
-                    # We need to wrap progress for aiogram
-                    async def aioprog(current, total, *args):
-                        await progress(current, total)
-
+                    # Aiogram 3.x download method doesn't support progress_callback directly on Bot object
+                    # We'll download without progress for now or use the session directly if needed
                     task = asyncio.create_task(
-                        app.download(media, destination=file_path, progress_callback=aioprog)
+                        app.download(media, destination=file_path)
                     )
                 else:
                     # Pyrogram download
