@@ -175,15 +175,20 @@ class TgCall(PyTgCalls):
                 )
             except exceptions.NoVideoSourceFound:
                 # Fallback to audio only
-                if stream.video_flags == types.MediaStream.Flags.REQUIRED:
-                    stream.video_flags = types.MediaStream.Flags.IGNORE
-                    await client.play(
-                        chat_id=chat_id,
-                        stream=stream,
-                        config=types.GroupCallConfig(auto_start=True),
-                    )
-                else:
-                    raise
+                # Re-create the stream without video to avoid AttributeError
+                stream = types.MediaStream(
+                    media_path=stream_url if stream_url else media.file_path,
+                    audio_parameters=types.AudioQuality.HIGH,
+                    video_parameters=types.VideoQuality.HD_720p,
+                    audio_flags=types.MediaStream.Flags.REQUIRED,
+                    video_flags=types.MediaStream.Flags.IGNORE,
+                    ffmpeg_parameters=f"-ss {seek_time}" if seek_time > 1 else None,
+                )
+                await client.play(
+                    chat_id=chat_id,
+                    stream=stream,
+                    config=types.GroupCallConfig(auto_start=True),
+                )
 
             if not seek_time:
                 media.time = 1
