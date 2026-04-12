@@ -40,8 +40,18 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
             if not media:
                 # Fallback to assistant
                 try:
+                    # Clear events before retrying with assistant
+                    msg_id = sent.message_id if hasattr(sent, "message_id") else sent.id
+                    tg.events.pop(msg_id, None)
+                    tg.last_edit.pop(msg_id, None)
+
                     fwd = await m.reply_to_message.forward(client.id)
+                    # Use app.id to retrieve from forward if assistant PM
                     p_msg = await client.get_messages(client.id, fwd.message_id)
+                    if not p_msg or p_msg.empty:
+                         # Try retrieving from app.id
+                         p_msg = await client.get_messages(app.id, fwd.message_id)
+
                     media = await tg.download(p_msg, sent, lang)
                 except Exception as e:
                     logger.error(f"Assistant fallback failed: {e}")

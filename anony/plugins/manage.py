@@ -354,9 +354,17 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
                 # Fallback to assistant for large files if Bot failed (likely standard API limit)
                 # Forward to assistant's PM to resolve PEER_ID_INVALID in private chat
                 try:
+                    # Clear events before retrying with assistant
+                    msg_id = sent.message_id if hasattr(sent, "message_id") else sent.id
+                    tg.events.pop(msg_id, None)
+                    tg.last_edit.pop(msg_id, None)
+
                     # Use a specific way to get the message for the assistant
                     fwd = await m.forward(client.id)
                     p_msg = await client.get_messages(client.id, fwd.message_id)
+                    if not p_msg or p_msg.empty:
+                         p_msg = await client.get_messages(app.id, fwd.message_id)
+
                     media = await tg.download(p_msg, sent, lang)
                 except Exception as e:
                     logger.error(f"Failed to forward/get message for assistant: {e}")

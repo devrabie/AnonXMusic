@@ -63,6 +63,9 @@ class Telegram:
 
         if is_aiogram:
             media = msg.audio or msg.voice or msg.video or msg.document or msg.video_note
+            if not media:
+                 logger.error(f"Aiogram message {msg.message_id} has no media")
+                 return None
             file_id = getattr(media, "file_unique_id", None)
             file_name = getattr(media, "file_name", f"{file_id}")
             file_ext = file_name.split(".")[-1] if "." in file_name else "mp4"
@@ -147,14 +150,25 @@ class Telegram:
                         try:
                             # If using Local API Server, we can get the local path
                             if config.API_SERVER:
-                                file = await app.get_file(media.file_id)
-                                if file.file_path and os.path.isabs(file.file_path):
-                                    if os.path.exists(file.file_path):
-                                        shutil.copy(file.file_path, file_path)
-                                        return
+                                try:
+                                    file = await app.get_file(media.file_id)
+                                    if file.file_path and os.path.isabs(file.file_path):
+                                        if os.path.exists(file.file_path):
+                                            shutil.copy(file.file_path, file_path)
+                                            return
+                                        else:
+                                            # Inside Docker, the absolute path might be different.
+                                            # Try to download using a relative path if we can guess it.
+                                            # The file_path from server is like /var/lib/.../TOKEN/videos/file_1.mp4
+                                            # Aiogram download_file usually works best.
+                                            await app.download_file(file.file_path, destination=file_path)
+                                            return
+                                except Exception as ex:
+                                    logger.warning(f"Local API optimized download failed: {ex}")
 
                             await app.download(media, destination=file_path)
                         except Exception as e:
+                            # If bot download fails, we return None and let caller try assistant
                             logger.error(f"Aiogram download failed: {e}")
                             raise
 
