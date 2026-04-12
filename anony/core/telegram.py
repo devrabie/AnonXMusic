@@ -7,8 +7,10 @@ import asyncio
 import os
 import time
 import re
+from typing import Union
 
-from pyrogram import types
+from pyrogram import types as pytypes
+from aiogram import types as aiotypes
 
 from anony import app, config
 from anony.helpers import Media, buttons, utils
@@ -22,10 +24,16 @@ class Telegram:
         self.active_tasks = {}
         self.sleep = 5
 
-    def get_media(self, msg: types.Message) -> bool:
-        return any([msg.video, msg.audio, msg.document, msg.voice, msg.video_note])
+    def get_media(self, msg: Union[pytypes.Message, aiotypes.Message]) -> bool:
+        return any([
+            getattr(msg, "video", None),
+            getattr(msg, "audio", None),
+            getattr(msg, "document", None),
+            getattr(msg, "voice", None),
+            getattr(msg, "video_note", None)
+        ])
 
-    async def cancel(self, query: types.CallbackQuery):
+    async def cancel(self, query: Union[pytypes.CallbackQuery, aiotypes.CallbackQuery]):
         event = self.events.get(query.message.id)
         task = self.active_tasks.pop(query.message.id, None)
         if event:
@@ -40,7 +48,7 @@ class Telegram:
         else:
             await query.answer(query.lang["dl_not_found"], show_alert=True)
 
-    async def download(self, msg: types.Message, sent: types.Message, lang: dict = None) -> Media | None:
+    async def download(self, msg: Union[pytypes.Message, aiotypes.Message], sent: aiotypes.Message, lang: dict = None) -> Media | None:
         msg_id = sent.message_id if hasattr(sent, "message_id") else sent.id
         event = asyncio.Event()
         self.events[msg_id] = event
@@ -49,22 +57,47 @@ class Telegram:
 
         _lang = lang or getattr(sent, "lang", None) or {}
 
-        media = msg.audio or msg.voice or msg.video or msg.document or msg.video_note
-        file_id = getattr(media, "file_unique_id", None)
-        file_ext = getattr(media, "file_name", "").split(".")[-1]
-        file_size = getattr(media, "file_size", 0)
-        file_title = getattr(media, "title", None) or getattr(media, "file_name", "Telegram File")
-        duration = getattr(media, "duration", 0)
+        # Detect message type
+        is_aiogram = isinstance(msg, aiotypes.Message)
+
+        if is_aiogram:
+            media = msg.audio or msg.voice or msg.video or msg.document or msg.video_note
+            file_id = getattr(media, "file_unique_id", None)
+            file_name = getattr(media, "file_name", f"{file_id}")
+            file_ext = file_name.split(".")[-1] if "." in file_name else "mp4"
+            file_size = getattr(media, "file_size", 0)
+            file_title = getattr(media, "title", None) or file_name
+            duration = getattr(media, "duration", 0)
+            mime_type = getattr(media, "mime_type", "")
+            msg_link = f"https://t.me/c/{str(msg.chat.id)[4:]}/{msg.message_id}" if str(msg.chat.id).startswith("-100") else None
+        else:
+            media = msg.audio or msg.voice or msg.video or msg.document or msg.video_note
+            file_id = getattr(media, "file_unique_id", None)
+            file_name = getattr(media, "file_name", "")
+            file_ext = file_name.split(".")[-1] if "." in file_name else "mp4"
+            file_size = getattr(media, "file_size", 0)
+            file_title = getattr(media, "title", None) or file_name or "Telegram File"
+            duration = getattr(media, "duration", 0)
+            mime_type = getattr(media, "mime_type", "")
+            msg_link = msg.link
+
         video = bool(
-            getattr(media, "mime_type", "").startswith("video/") or
-            (getattr(media, "file_name", "").lower().endswith((".mp4", ".mkv", ".mov", ".avi", ".webm")))
+            mime_type.startswith("video/") or
+            file_name.lower().endswith((".mp4", ".mkv", ".mov", ".avi", ".webm")) or
+            (is_aiogram and msg.video_note) or (not is_aiogram and msg.video_note)
         )
 
         if duration > config.DURATION_LIMIT:
             await sent.edit_text(_lang.get("play_duration_limit", "Limit").format(config.DURATION_LIMIT // 60))
             return None
 
-        if file_size > 200 * 1024 * 1024:
+        # Standard bot limit is 20MB for downloads unless using Local API
+        if not config.API_SERVER and is_aiogram and file_size > 20 * 1024 * 1024:
+             # If too big for bot and no local server, we can't download via bot
+             # We should return None and let the caller try assistant
+             return None
+
+        if file_size > 2000 * 1024 * 1024: # 2GB hard limit
             await sent.edit_text(_lang.get("dl_limit", "Limit"))
             return None
 
@@ -77,9 +110,9 @@ class Telegram:
                 return
 
             self.last_edit[msg_id] = now
-            percent = current * 100 / total
+            percent = (current * 100 / total) if total > 0 else 0
             speed = current / (now - start_time or 1e-6)
-            eta = utils.format_eta(int((total - current) / speed))
+            eta = utils.format_eta(int((total - current) / speed)) if speed > 0 else "00:00"
             text = _lang.get("dl_progress", "Downloading...").format(
                 utils.format_size(current),
                 utils.format_size(total),
@@ -87,10 +120,15 @@ class Telegram:
                 utils.format_size(speed),
                 eta,
             )
+            if config.API_SERVER and is_aiogram:
+                 text += f"\n\n<b>Local API:</b> Active"
 
-            await sent.edit_text(
-                text, reply_markup=buttons.cancel_dl(_lang.get("cancel", "Cancel"))
-            )
+            try:
+                await sent.edit_text(
+                    text, reply_markup=buttons.cancel_dl(_lang.get("cancel", "Cancel"))
+                )
+            except Exception:
+                pass
 
         try:
             file_path = f"downloads/{file_id}.{file_ext}"
@@ -100,9 +138,22 @@ class Telegram:
                     return None
 
                 self.active.append(file_id)
-                task = asyncio.create_task(
-                    msg.download(file_name=file_path, progress=progress)
-                )
+
+                if is_aiogram:
+                    # Aiogram download
+                    # We need to wrap progress for aiogram
+                    async def aioprog(current, total, *args):
+                        await progress(current, total)
+
+                    task = asyncio.create_task(
+                        app.download(media, destination=file_path, progress_callback=aioprog)
+                    )
+                else:
+                    # Pyrogram download
+                    task = asyncio.create_task(
+                        msg.download(file_name=file_path, progress=progress)
+                    )
+
                 self.active_tasks[msg_id] = task
                 await task
                 if file_id in self.active: self.active.remove(file_id)
@@ -117,7 +168,7 @@ class Telegram:
                 duration_sec=duration,
                 file_path=file_path,
                 message_id=msg_id,
-                url=msg.link,
+                url=msg_link,
                 title=file_title,
                 video=video,
             )
@@ -139,7 +190,7 @@ class Telegram:
             video=video,
         )
 
-    async def get_from_link(self, link: str, sent: types.Message, lang: dict = None) -> Media | None:
+    async def get_from_link(self, link: str, sent: aiotypes.Message, lang: dict = None) -> Media | None:
         try:
             link = link.strip()
             if "t.me/c/" in link:

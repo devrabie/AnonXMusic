@@ -46,6 +46,10 @@ class Bot(AiogramBot):
         Starts the bot and performs initial setup.
         """
         self._me = await self.get_me()
+        self.id = self._me.id
+
+        if config.API_SERVER:
+            logger.info(f"Using Local API Server: {config.API_SERVER}")
 
         try:
             await self.send_message(self.logger_id, "Bot Started")

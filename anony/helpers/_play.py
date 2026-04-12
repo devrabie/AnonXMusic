@@ -35,15 +35,17 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
              return await sent.edit_text(lang["play_no_assistant"])
 
         try:
-            # We need the pyrogram message object. We can try to get it by ID
-            # But the assistant might not be in the chat where the reply is.
-            # Usually, for replies, we assume it's in the same chat.
-            try:
-                p_msg = await client.get_messages(m.chat.id, m.reply_to_message.message_id)
-            except Exception:
-                fwd = await m.reply_to_message.forward(client.id)
-                p_msg = await client.get_messages(client.id, fwd.message_id)
-            media = await tg.download(p_msg, sent, lang)
+            # Try Bot-based download first
+            media = await tg.download(m.reply_to_message, sent, lang)
+            if not media:
+                # Fallback to assistant
+                try:
+                    fwd = await m.reply_to_message.forward(client.id)
+                    p_msg = await client.get_messages(client.id, fwd.message_id)
+                    media = await tg.download(p_msg, sent, lang)
+                except Exception as e:
+                    logger.error(f"Assistant fallback failed: {e}")
+                    return await sent.edit_text(f"Error: {e}")
         except Exception as e:
             return await sent.edit_text(f"Error: {e}")
     elif url:

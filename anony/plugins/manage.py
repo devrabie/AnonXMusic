@@ -348,16 +348,19 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
             if not client:
                  return await sent.edit_text(lang["play_no_assistant"])
 
-            # Forward to assistant's PM to resolve PEER_ID_INVALID in private chat
-            try:
-                # Use a specific way to get the message for the assistant
-                fwd = await m.forward(client.id)
-                p_msg = await client.get_messages(client.id, fwd.message_id)
-            except Exception as e:
-                logger.error(f"Failed to forward/get message for assistant: {e}")
-                return await sent.edit_text(f"Error: {e}")
-
-            media = await tg.download(p_msg, sent, lang)
+            # Try Bot-based download first (works for all sizes with Local API)
+            media = await tg.download(m, sent, lang)
+            if not media:
+                # Fallback to assistant for large files if Bot failed (likely standard API limit)
+                # Forward to assistant's PM to resolve PEER_ID_INVALID in private chat
+                try:
+                    # Use a specific way to get the message for the assistant
+                    fwd = await m.forward(client.id)
+                    p_msg = await client.get_messages(client.id, fwd.message_id)
+                    media = await tg.download(p_msg, sent, lang)
+                except Exception as e:
+                    logger.error(f"Failed to forward/get message for assistant: {e}")
+                    return await sent.edit_text(f"Error: {e}")
         else:
             return await sent.edit_text(lang["invalid_telegram_link"])
 
