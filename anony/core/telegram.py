@@ -7,6 +7,7 @@ import asyncio
 import os
 import time
 import re
+import shutil
 from typing import Union
 
 from pyrogram import types as pytypes
@@ -141,11 +142,22 @@ class Telegram:
 
                 if is_aiogram:
                     # Aiogram download
-                    # Aiogram 3.x download method doesn't support progress_callback directly on Bot object
-                    # We'll download without progress for now or use the session directly if needed
-                    task = asyncio.create_task(
-                        app.download(media, destination=file_path)
-                    )
+                    async def download_aiogram():
+                        try:
+                            # If using Local API Server, we can get the local path
+                            if config.API_SERVER:
+                                file = await app.get_file(media.file_id)
+                                if file.file_path and os.path.isabs(file.file_path):
+                                    if os.path.exists(file.file_path):
+                                        shutil.copy(file.file_path, file_path)
+                                        return
+
+                            await app.download(media, destination=file_path)
+                        except Exception as e:
+                            logger.error(f"Aiogram download failed: {e}")
+                            raise
+
+                    task = asyncio.create_task(download_aiogram())
                 else:
                     # Pyrogram download
                     task = asyncio.create_task(
@@ -153,7 +165,14 @@ class Telegram:
                     )
 
                 self.active_tasks[msg_id] = task
-                await task
+                try:
+                    await task
+                except Exception as e:
+                    logger.error(f"Download task failed for {file_id}: {e}")
+                    if file_id in self.active: self.active.remove(file_id)
+                    self.active_tasks.pop(msg_id, None)
+                    return None
+
                 if file_id in self.active: self.active.remove(file_id)
                 self.active_tasks.pop(msg_id, None)
                 await sent.edit_text(
