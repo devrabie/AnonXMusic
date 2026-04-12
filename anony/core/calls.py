@@ -167,11 +167,24 @@ class TgCall(PyTgCalls):
                 ffmpeg_parameters=f"-ss {seek_time}" if seek_time > 1 else None,
             )
         try:
-            await client.play(
-                chat_id=chat_id,
-                stream=stream,
-                config=types.GroupCallConfig(auto_start=True),
-            )
+            try:
+                await client.play(
+                    chat_id=chat_id,
+                    stream=stream,
+                    config=types.GroupCallConfig(auto_start=True),
+                )
+            except exceptions.NoVideoSourceFound:
+                # Fallback to audio only
+                if stream.video_flags == types.MediaStream.Flags.REQUIRED:
+                    stream.video_flags = types.MediaStream.Flags.IGNORE
+                    await client.play(
+                        chat_id=chat_id,
+                        stream=stream,
+                        config=types.GroupCallConfig(auto_start=True),
+                    )
+                else:
+                    raise
+
             if not seek_time:
                 media.time = 1
                 await db.add_call(chat_id)

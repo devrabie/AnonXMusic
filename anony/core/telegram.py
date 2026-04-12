@@ -83,9 +83,10 @@ class Telegram:
             msg_link = msg.link
 
         video = bool(
+            (is_aiogram and (msg.video or msg.video_note)) or
+            (not is_aiogram and (msg.video or msg.video_note)) or
             mime_type.startswith("video/") or
-            file_name.lower().endswith((".mp4", ".mkv", ".mov", ".avi", ".webm")) or
-            (is_aiogram and msg.video_note) or (not is_aiogram and msg.video_note)
+            file_name.lower().endswith((".mp4", ".mkv", ".mov", ".avi", ".webm"))
         )
 
         if duration > config.DURATION_LIMIT:
