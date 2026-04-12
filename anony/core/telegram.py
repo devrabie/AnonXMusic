@@ -13,7 +13,7 @@ from typing import Union
 from pyrogram import types as pytypes
 from aiogram import types as aiotypes
 
-from anony import app, config
+from anony import app, config, logger
 from anony.helpers import Media, buttons, utils
 
 

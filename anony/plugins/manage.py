@@ -10,7 +10,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from anony import app, dp, db, lang, anon, tg, queue, config
+from anony import app, dp, db, lang, anon, tg, queue, config, logger
 from anony.helpers import buttons, join_assistant, utils
 
 class ManageChat(StatesGroup):
