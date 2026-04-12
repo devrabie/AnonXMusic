@@ -6,6 +6,7 @@
 import logging
 from aiogram import Bot as AiogramBot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.telegram import TelegramAPIServer
 from aiogram.enums import ParseMode, ChatMemberStatus
 
 from anony import config, logger
@@ -13,8 +14,15 @@ from anony import config, logger
 
 class Bot(AiogramBot):
     def __init__(self):
+        session = None
+        if config.API_SERVER:
+            from aiogram.client.session.aiohttp import AiohttpSession
+            server = TelegramAPIServer.from_base(config.API_SERVER)
+            session = AiohttpSession(api=server)
+
         super().__init__(
             token=config.BOT_TOKEN,
+            session=session,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
         self.owner = config.OWNER_ID

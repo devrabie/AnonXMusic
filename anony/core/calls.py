@@ -32,9 +32,11 @@ class TgCall(PyTgCalls):
     async def stop(self, chat_id: int) -> None:
         from anony import queue
         client = await db.get_assistant(chat_id)
-        await queue.clear(chat_id)
+        # We don't clear the queue anymore as per user request for permanent playlists
+        # await queue.clear(chat_id)
         await db.remove_call(chat_id)
         await db.set_loop(chat_id, False)
+        queue._played[chat_id] = 0
 
         try:
             await client.leave_call(chat_id, close=False)

@@ -23,7 +23,7 @@ class Telegram:
         self.sleep = 5
 
     def get_media(self, msg: types.Message) -> bool:
-        return any([msg.video, msg.audio, msg.document, msg.voice])
+        return any([msg.video, msg.audio, msg.document, msg.voice, msg.video_note])
 
     async def cancel(self, query: types.CallbackQuery):
         event = self.events.get(query.message.id)
@@ -49,7 +49,7 @@ class Telegram:
 
         _lang = lang or getattr(sent, "lang", None) or {}
 
-        media = msg.audio or msg.voice or msg.video or msg.document
+        media = msg.audio or msg.voice or msg.video or msg.document or msg.video_note
         file_id = getattr(media, "file_unique_id", None)
         file_ext = getattr(media, "file_name", "").split(".")[-1]
         file_size = getattr(media, "file_size", 0)

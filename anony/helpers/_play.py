@@ -26,7 +26,7 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
                 break
 
     media = None
-    if m.reply_to_message and (m.reply_to_message.audio or m.reply_to_message.video or m.reply_to_message.document):
+    if m.reply_to_message and (m.reply_to_message.audio or m.reply_to_message.video or m.reply_to_message.document or m.reply_to_message.voice or m.reply_to_message.video_note):
         sent = await m.reply(lang["play_downloading"])
         # Bridge aiogram and pyrogram for download via assistant
         from anony import userbot
@@ -81,9 +81,14 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
     if position == 0 and not await db.get_call(chat_id):
         if not await join_assistant(chat_id, lang, m):
             return
+        queue._played[chat_id] = 0
         await anon.play_media(chat_id, m if m.chat.id == chat_id else None, media)
         if m.chat.id != chat_id:
-             await m.reply(lang["play_started"].format(html.escape(media.title), chat_id))
+             is_paused = await db.is_paused(chat_id)
+             await m.reply(
+                 lang["play_started"].format(html.escape(media.title), chat_id),
+                 reply_markup=buttons.controls(chat_id, is_paused=is_paused)
+             )
     else:
         await m.reply(
             lang["play_queued"].format(
