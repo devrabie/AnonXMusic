@@ -23,12 +23,20 @@ class TgCall(PyTgCalls):
     async def pause(self, chat_id: int) -> bool:
         client = await db.get_assistant(chat_id)
         await db.playing(chat_id, paused=True)
-        return await client.pause(chat_id)
+        try:
+            return await client.pause(chat_id)
+        except exceptions.NotInCallError:
+            await self.stop(chat_id)
+            return False
 
     async def resume(self, chat_id: int) -> bool:
         client = await db.get_assistant(chat_id)
         await db.playing(chat_id, paused=False)
-        return await client.resume(chat_id)
+        try:
+            return await client.resume(chat_id)
+        except exceptions.NotInCallError:
+            await self.stop(chat_id)
+            return False
 
     async def stop(self, chat_id: int) -> None:
         from anony import queue
