@@ -8,19 +8,9 @@ import signal
 import importlib
 from contextlib import suppress
 
-from anony import (anon, app, config, db, logger,
+from anony import (anon, app, dp, config, db, logger,
                    stop, thumb, userbot, yt)
 from anony.plugins import all_modules
-
-
-async def idle():
-    loop = asyncio.get_running_loop()
-    stop_event = asyncio.Event()
-
-    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGABRT):
-        with suppress(NotImplementedError):
-            loop.add_signal_handler(sig, stop_event.set)
-    await stop_event.wait()
 
 async def main():
     await db.connect()
@@ -36,17 +26,21 @@ async def main():
     if config.COOKIES_URL:
         await yt.save_cookies(config.COOKIES_URL)
 
+    # sudoers and blacklisted users are now part of the FSM or Filter logic
+    # but let's keep the memory sets updated if plugins use them.
     sudoers = await db.get_sudoers()
-    app.sudoers.update(sudoers)
-    app.bl_users.update(await db.get_blacklisted())
-    logger.info(f"Loaded {len(app.sudoers)} sudo users.")
+    app.sudoers = sudoers # Assuming Bot class was updated or we use db directly
+    db.blacklisted = await db.get_blacklisted()
+    logger.info(f"Loaded {len(sudoers)} sudo users.")
 
-    await idle()
-    await stop()
+    try:
+        await dp.start_polling(app)
+    finally:
+        await stop()
 
 
 if __name__ == "__main__":
     try:
-        asyncio.get_event_loop().run_until_complete(main())
+        asyncio.run(main())
     except KeyboardInterrupt:
         pass

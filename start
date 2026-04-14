@@ -1,1 +1,4 @@
+#!/bin/bash
+pkill -f "python3 -m anony"
+sleep 2
 python3 -m anony

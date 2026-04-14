@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
 
-
 import io
 import os
 import re
@@ -12,25 +11,29 @@ import traceback
 from html import escape
 from typing import Any, Optional, Tuple
 
-from pyrogram import filters, types
+from aiogram import types, F
+from aiogram.filters import Command, Filter
 
-from anony import anon, app, config, db, lang, userbot
+from anony import anon, app, dp, config, db, userbot
 from anony.helpers import format_exception, meval
 
+class SudoFilter(Filter):
+    async def __call__(self, message: types.Message) -> bool:
+        return message.from_user.id in app.sudoers
 
-@app.on_message(filters.command(["eval", "exec"]) & filters.user(app.owner))
-@app.on_edited_message(filters.command(["eval", "exec"]) & filters.user(app.owner))
-@lang.language()
-async def eval_handler(_, message: types.Message):
-    if len(message.command) < 2:
-        return await message.reply_text(message.lang["eval_inp"])
+@dp.message(Command("eval", "exec"), SudoFilter())
+@dp.edited_message(Command("eval", "exec"), SudoFilter())
+async def eval_handler(message: types.Message, lang: dict):
+    command = message.text.split(maxsplit=1)
+    if len(command) < 2:
+        return await message.reply(lang["eval_inp"])
 
-    code = message.text.split(None, 1)[1]
+    code = command[1]
     out_buf = io.StringIO()
 
     async def _eval_code() -> Tuple[str, Optional[str]]:
         async def send(*args: Any, **kwargs: Any) -> types.Message:
-            return await message.reply_text(*args, **kwargs)
+            return await message.reply(*args, **kwargs)
 
         def _print(*args: Any, **kwargs: Any) -> None:
             kwargs.setdefault("file", out_buf)
@@ -68,7 +71,7 @@ async def eval_handler(_, message: types.Message):
             formatted_tb = format_exception(
                 e, tb[snippet_tb:] if snippet_tb != -1 else tb
             )
-            return message.lang["eval_error"], formatted_tb
+            return lang["eval_error"], formatted_tb
 
     _, result = await _eval_code()
 
@@ -76,13 +79,13 @@ async def eval_handler(_, message: types.Message):
         print(result, file=out_buf)
 
     output = out_buf.getvalue().strip()
-    response = message.lang["eval_out"].format(escape(output))
+    response = lang["eval_out"].format(escape(output))
 
     if len(response) > 4096:
-        with io.BytesIO(output.encode()) as out_file:
-            out_file.name = f"{uuid.uuid4().hex[:8].lower()}.txt"
-            return await message.reply_document(
-                document=out_file, disable_notification=True
-            )
+        from aiogram.types import BufferedInputFile
+        return await message.reply_document(
+            document=BufferedInputFile(output.encode(), filename=f"{uuid.uuid4().hex[:8].lower()}.txt"),
+            disable_notification=True
+        )
 
-    await message.reply_text(response)
+    await message.reply(response)

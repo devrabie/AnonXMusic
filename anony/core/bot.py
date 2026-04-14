@@ -3,53 +3,73 @@
 # This file is part of AnonXMusic
 
 
-import pyrogram
+import logging
+from aiogram import Bot as AiogramBot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.client.telegram import TelegramAPIServer
+from aiogram.enums import ParseMode, ChatMemberStatus
 
 from anony import config, logger
 
 
-class Bot(pyrogram.Client):
+class Bot(AiogramBot):
     def __init__(self):
+        session = None
+        if config.API_SERVER:
+            from aiogram.client.session.aiohttp import AiohttpSession
+            server = TelegramAPIServer.from_base(config.API_SERVER)
+            session = AiohttpSession(api=server)
+
         super().__init__(
-            name="Anony",
-            api_id=config.API_ID,
-            api_hash=config.API_HASH,
-            bot_token=config.BOT_TOKEN,
-            parse_mode=pyrogram.enums.ParseMode.HTML,
-            max_concurrent_transmissions=7,
-            link_preview_options=pyrogram.types.LinkPreviewOptions(is_disabled=True),
+            token=config.BOT_TOKEN,
+            session=session,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
         self.owner = config.OWNER_ID
-        self.logger = config.LOGGER_ID
-        self.bl_users = pyrogram.filters.user()
-        self.sudoers = pyrogram.filters.user(self.owner)
+        self.logger_id = config.LOGGER_ID
+        self.sudoers = [int(self.owner)]
+
+    @property
+    def id(self):
+        try:
+            return self._id
+        except AttributeError:
+            return super().id
+
+    @property
+    def name(self):
+        return self._me.first_name
+
+    @property
+    def username(self):
+        return self._me.username
+
+    @property
+    def mention(self):
+        return f"@{self.username}"
 
     async def boot(self):
         """
         Starts the bot and performs initial setup.
-
-        Raises:
-            SystemExit: If the bot fails to access the log group or is not an administrator in the logger group.
         """
-        await super().start()
-        self.id = self.me.id
-        self.name = self.me.first_name
-        self.username = self.me.username
-        self.mention = self.me.mention
+        self._me = await self.get_me()
+        self._id = self._me.id
+
+        if config.API_SERVER:
+            logger.info(f"Using Local API Server: {config.API_SERVER}")
 
         try:
-            await self.send_message(self.logger, "Bot Started")
-            get = await self.get_chat_member(self.logger, self.id)
+            await self.send_message(self.logger_id, "Bot Started")
+            get = await self.get_chat_member(self.logger_id, self.id)
+            if get.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]:
+                logger.warning("Please promote the bot as an admin in logger group.")
         except Exception as ex:
-            raise SystemExit(f"Bot has failed to access the log group: {self.logger}\nReason: {ex}")
-
-        if get.status != pyrogram.enums.ChatMemberStatus.ADMINISTRATOR:
-            raise SystemExit("Please promote the bot as an admin in logger group.")
+            logger.warning(f"Bot has failed to access the log group: {self.logger_id}\nReason: {ex}")
         logger.info(f"Bot started as @{self.username}")
 
     async def exit(self):
         """
         Asynchronously stops the bot.
         """
-        await super().stop()
+        await self.session.close()
         logger.info("Bot stopped.")

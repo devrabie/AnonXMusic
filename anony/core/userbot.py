@@ -17,20 +17,28 @@ class Userbot(Client):
         Each client is assigned a unique name based on the key in the `clients` dictionary.
         """
         self.clients = []
-        clients = {"one": "SESSION1", "two": "SESSION2", "three": "SESSION3"}
-        for key, string_key in clients.items():
-            name = f"AnonyUB{key[-1]}"
-            session = getattr(config, string_key)
-            setattr(
-                self,
-                key,
-                Client(
-                    name=name,
-                    api_id=config.API_ID,
-                    api_hash=config.API_HASH,
-                    session_string=session,
-                ),
-            )
+
+    async def _init_client(self, key: str, session: str):
+        """Initializes a single userbot client."""
+        from anony import db
+        if not session:
+            session = await db.get_session(key)
+
+        if not session:
+            return
+
+        name = f"AnonyUB{key[-1]}"
+        setattr(
+            self,
+            key,
+            Client(
+                name=name,
+                api_id=config.API_ID,
+                api_hash=config.API_HASH,
+                session_string=session,
+                in_memory=True,
+            ),
+        )
 
     async def boot_client(self, num: int, ub: Client):
         """
@@ -41,48 +49,47 @@ class Userbot(Client):
         Raises:
             SystemExit: If the client fails to send a message in the log group.
         """
-        clients = {
-            1: self.one,
-            2: self.two,
-            3: self.three,
-        }
-        client = clients[num]
-        await client.start()
+        if not getattr(ub, "is_connected", False):
+            await ub.start()
         try:
-            await client.send_message(config.LOGGER_ID, "Assistant Started")
+            try:
+                await ub.resolve_peer(config.LOGGER_ID)
+            except Exception:
+                pass
+            await ub.send_message(config.LOGGER_ID, "Assistant Started")
         except Exception:
-            raise SystemExit(f"Assistant {num} failed to send message in log group.")
+            logger.warning(f"Assistant {num} failed to send message in log group.")
 
-        client.id = ub.me.id
-        client.name = ub.me.first_name
-        client.username = ub.me.username
-        client.mention = ub.me.mention
-        self.clients.append(client)
-        try:
-            await ub.join_chat("fallenx")
-        except Exception:
-            pass
-        logger.info(f"Assistant {num} started as @{client.username}")
+        ub.id = ub.me.id
+        ub.name = ub.me.first_name
+        ub.username = ub.me.username
+        ub.mention = ub.me.mention
+        self.clients.append(ub)
+        logger.info(f"Assistant {num} started as @{ub.username}")
 
     async def boot(self):
         """
         Asynchronously starts the assistants.
         """
-        if config.SESSION1:
+        await self._init_client("one", config.SESSION1)
+        await self._init_client("two", config.SESSION2)
+        await self._init_client("three", config.SESSION3)
+
+        if hasattr(self, "one"):
             await self.boot_client(1, self.one)
-        if config.SESSION2:
+        if hasattr(self, "two"):
             await self.boot_client(2, self.two)
-        if config.SESSION3:
+        if hasattr(self, "three"):
             await self.boot_client(3, self.three)
 
     async def exit(self):
         """
         Asynchronously stops the assistants.
         """
-        if config.SESSION1:
+        if hasattr(self, "one"):
             await self.one.stop()
-        if config.SESSION2:
+        if hasattr(self, "two"):
             await self.two.stop()
-        if config.SESSION3:
+        if hasattr(self, "three"):
             await self.three.stop()
         logger.info("Assistants stopped.")

@@ -3,55 +3,34 @@
 # This file is part of AnonXMusic
 
 
-from pyrogram import filters, types
+from aiogram import types, F
+from aiogram.filters import Command
+from anony import dp, lang, db, app, userbot
 
-from anony import app, db, lang
-from anony.helpers import utils
 
+@dp.message(Command("addsudo", "rmsudo", "delsudo"), F.from_user.id == int(app.owner))
+async def sudo_hndlr(m: types.Message, lang: dict):
+    command = m.text.split()
+    if not m.reply_to_message and len(command) < 2:
+        return await m.reply("Reply to a user or provide user ID.")
 
-@app.on_message(filters.command(["addsudo", "delsudo", "rmsudo"]) & filters.user(app.owner))
-@lang.language()
-async def _sudo(_, m: types.Message):
-    user = await utils.extract_user(m)
-    if not user:
-        return await m.reply_text(m.lang["user_not_found"])
+    user_id = m.reply_to_message.from_user.id if m.reply_to_message else int(command[1])
 
-    if m.command[0] == "addsudo":
-        if user.id in app.sudoers:
-            return await m.reply_text(m.lang["sudo_already"].format(user.mention))
-
-        app.sudoers.add(user.id)
-        await db.add_sudo(user.id)
-        await m.reply_text(m.lang["sudo_added"].format(user.mention))
+    if "rm" in command[0] or "del" in command[0]:
+        await db.remove_sudo(user_id)
+        if user_id in app.sudoers:
+            app.sudoers.remove(user_id)
+        await m.reply(lang["sudo_removed"].format(user_id))
     else:
-        if user.id not in app.sudoers:
-            return await m.reply_text(m.lang["sudo_not"].format(user.mention))
+        await db.add_sudo(user_id)
+        if user_id not in app.sudoers:
+            app.sudoers.append(user_id)
+        await m.reply(lang["sudo_added"].format(user_id))
 
-        app.sudoers.discard(user.id)
-        await db.del_sudo(user.id)
-        await m.reply_text(m.lang["sudo_removed"].format(user.mention))
-
-
-o_mention = None
-
-@app.on_message(filters.command(["listsudo", "sudolist"]))
-@lang.language()
-async def _listsudo(_, m: types.Message):
-    global o_mention
-    sent = await m.reply_text(m.lang["sudo_fetching"])
-
-    if not o_mention:
-        o_mention = (await app.get_users(app.owner)).mention
-    txt = m.lang["sudo_owner"].format(o_mention)
-    sudoers = await db.get_sudoers()
-    if sudoers:
-        txt += m.lang["sudo_users"]
-
-    for user_id in sudoers:
-        try:
-            user = (await app.get_users(user_id)).mention
-            txt += f"\n- {user}"
-        except Exception:
-            continue
-
-    await sent.edit_text(txt)
+@dp.message(Command("sudolist", "listsudo"))
+async def sudolist_hndlr(m: types.Message, lang: dict):
+    text = lang["sudo_owner"].format(app.owner)
+    text += lang["sudo_users"]
+    for count, user_id in enumerate(app.sudoers, 1):
+        text += f"\n{count}. <code>{user_id}</code>"
+    await m.reply(text)

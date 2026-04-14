@@ -40,8 +40,8 @@ Built with Python, Pyrogram, and Py-TgCalls, it’s optimized for reliability an
 
 <h3>✔️ Prerequisites</h3>
 
-- <a href="https://www.python.org">Python 3.10+</a> installed  
-- <a href="https://deno.com/">deno</a> & <a href="https://ffmpeg.org//">ffmpeg</a> installed on your system  
+- <a href="https://www.python.org">Python 3.10+</a> installed
+- <a href="https://deno.com/">deno</a> & <a href="https://ffmpeg.org//">ffmpeg</a> installed on your system
 - Required variables mentioned in <a href="https://github.com/AnonymousX1025/AnonXMusic/blob/master/sample.env">sample.env</a>
 
 <details>
@@ -54,6 +54,13 @@ git clone https://github.com/AnonymousX1025/AnonXMusic && cd AnonXMusic
 
 # Install dependencies
 pip3 install -U -r requirements.txt
+
+# Login interactively (Optional, if you don't have session string)
+python3 login.py
+
+# Fix YouTube 'Sign in to confirm you’re not a bot' error:
+# 1. Export cookies from browser as Netscape format.
+# 2. Upload to a paste site (like batbin.me) and set the raw URL in COOKIES_URL in .env.
 
 # Rename and configure environment variables
 mv sample.env .env
@@ -89,7 +96,6 @@ API_HASH=abcdef1234567890
 BOT_TOKEN=123456:ABC-DEF
 OWNER_ID=123456789
 LOGGER_ID=-1001234567890
-MONGO_URL=mongodb+srv://
 SESSION=BQgfh...AA
 ```
 
@@ -100,8 +106,8 @@ SESSION=BQgfh...AA
 
 <h2>🧐 Usage</h2>
 
-1. Add the bot to your Telegram group.  
-2. Promote it to <b>admin</b> with invite users permission.  
+1. Add the bot to your Telegram group.
+2. Promote it to <b>admin</b> with invite users permission.
 3. Use commands in the chat to control playback:
 <details>
     <summary>Commands overview</summary>
@@ -123,9 +129,9 @@ SESSION=BQgfh...AA
 
 Contributions are welcome!
 
-1. Fork the repository.  
-2. Create your branch: <code>git checkout -b feature/new</code>.  
-4. Commit changes: <code>git commit -m 'New feature'</code>.  
+1. Fork the repository.
+2. Create your branch: <code>git checkout -b feature/new</code>.
+4. Commit changes: <code>git commit -m 'New feature'</code>.
 5. Push: <code>git push origin feature/new</code>
 6. Open a Pull Request.
 

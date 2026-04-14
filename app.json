@@ -20,11 +20,6 @@
             "value": "",
             "required": true
         },
-        "MONGO_URL": {
-            "description": "Get a mongodb url from https://cloud.mongodb.com.",
-            "value": "",
-            "required": true
-        },
         "LOGGER_ID": {
             "description": "Your log group ID, add your bot there and promote as an admin.",
             "value": "",

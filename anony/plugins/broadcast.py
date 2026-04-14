@@ -5,97 +5,107 @@
 
 import os
 import asyncio
+from aiogram import types, F
+from aiogram.filters import Command, Filter
+from aiogram.exceptions import TelegramRetryAfter
 
-from pyrogram import errors, filters, types
+from anony import app, dp, db, logger
 
-from anony import app, db, lang
+class SudoFilter(Filter):
+    async def __call__(self, message: types.Message) -> bool:
+        return message.from_user.id in app.sudoers
 
-
-broadcasting = False
-
-@app.on_message(filters.command(["broadcast"]) & app.sudoers)
-@lang.language()
-async def _broadcast(_, message: types.Message):
+@dp.message(Command("broadcast"), SudoFilter())
+async def _broadcast(message: types.Message, lang: dict):
     global broadcasting
     if not message.reply_to_message:
-        return await message.reply_text(message.lang["gcast_usage"])
+        return await message.reply(lang["gcast_usage"])
 
     if broadcasting:
-        return await message.reply_text(message.lang["gcast_active"])
+        return await message.reply(lang["gcast_active"])
 
     msg = message.reply_to_message
     count, ucount = 0, 0
     chats, groups, users = [], [], []
-    sent = await message.reply_text(message.lang["gcast_start"])
+    sent = await message.reply(lang["gcast_start"])
 
-    if "-nochat" not in message.command:
+    command = message.text.split()
+    if "-nochat" not in command:
         groups.extend(await db.get_chats())
-    if "-user" in message.command:
+    if "-user" in command:
         users.extend(await db.get_users())
 
     chats.extend(groups + users)
     broadcasting = True
 
-    await msg.forward(app.logger)
-    await (await app.send_message(
-        chat_id=app.logger, 
-        text=message.lang["gcast_log"].format(
-            message.from_user.id,
-            message.from_user.mention,
-            message.text,
+    try:
+        log_msg = await msg.send_copy(chat_id=app.logger_id)
+        # await log_msg.pin()
+        await app.send_message(
+            chat_id=app.logger_id,
+            text=lang["gcast_log"].format(
+                message.from_user.id,
+                message.from_user.mention_html(),
+                message.text,
+            )
         )
-    )).pin(disable_notification=False)
-    await asyncio.sleep(5)
+    except:
+        pass
+
+    await asyncio.sleep(2)
 
     failed = ""
     for chat in chats:
         if not broadcasting:
-            await sent.edit_text(message.lang["gcast_stopped"].format(count, ucount))
+            await sent.edit_text(lang["gcast_stopped"].format(count, ucount))
             break
 
         try:
-            (
-                await msg.copy(chat, reply_markup=msg.reply_markup)
-                if "-copy" in message.text
-                else await msg.forward(chat)
-            )
+            if "-copy" in message.text:
+                await msg.send_copy(chat_id=chat, reply_markup=msg.reply_markup)
+            else:
+                await msg.forward(chat_id=chat)
+
             if chat in groups:
                 count += 1
             else:
                 ucount += 1
             await asyncio.sleep(0.1)
-        except errors.FloodWait as fw:
-            await asyncio.sleep(fw.value + 30)
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(e.retry_after + 5)
         except Exception as ex:
             failed += f"{chat} - {ex}\n"
             continue
 
-    text = message.lang["gcast_end"].format(count, ucount)
+    text = lang["gcast_end"].format(count, ucount)
     if failed:
-        with open("errors.txt", "w") as f:
-            f.write(failed)
+        from aiogram.types import BufferedInputFile
         await message.reply_document(
-            document="errors.txt",
+            document=BufferedInputFile(failed.encode(), filename="errors.txt"),
             caption=text,
         )
-        os.remove("errors.txt")
+    else:
+        await sent.edit_text(text)
     broadcasting = False
-    await sent.edit_text(text)
 
 
-@app.on_message(filters.command(["stop_gcast", "stop_broadcast"]) & app.sudoers)
-@lang.language()
-async def _stop_gcast(_, message: types.Message):
+@dp.message(Command("stop_gcast", "stop_broadcast"), SudoFilter())
+async def _stop_gcast(message: types.Message, lang: dict):
     global broadcasting
     if not broadcasting:
-        return await message.reply_text(message.lang["gcast_inactive"])
+        return await message.reply(lang["gcast_inactive"])
 
     broadcasting = False
-    await (await app.send_message(
-        chat_id=app.logger,
-        text=message.lang["gcast_stop_log"].format(
-            message.from_user.id,
-            message.from_user.mention
+    try:
+        await app.send_message(
+            chat_id=app.logger_id,
+            text=lang["gcast_stop_log"].format(
+                message.from_user.id,
+                message.from_user.mention_html()
+            )
         )
-    )).pin(disable_notification=False)
-    await message.reply_text(message.lang["gcast_stop"])
+    except:
+        pass
+    await message.reply(lang["gcast_stop"])
+
+broadcasting = False

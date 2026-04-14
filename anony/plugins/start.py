@@ -3,44 +3,38 @@
 # This file is part of AnonXMusic
 
 import asyncio
-from pyrogram import enums, filters, types
+from aiogram import types, F, enums
+from aiogram.filters import Command
 
-from anony import app, config, db, lang
+from anony import app, dp, config, db, userbot
 from anony.helpers import buttons, utils
 
 
-@app.on_message(filters.command(["help"]) & filters.private & ~app.bl_users)
-@lang.language()
-async def _help(_, m: types.Message):
-    await m.reply_text(
-        text=m.lang["help_menu"],
-        reply_markup=buttons.help_markup(m.lang),
-        quote=True,
+@dp.message(Command("help"), F.chat.type == enums.ChatType.PRIVATE)
+async def _help(m: types.Message, lang: dict):
+    await m.reply(
+        text=lang["help_menu"],
+        reply_markup=buttons.help_markup(lang),
     )
 
 
-@app.on_message(filters.command(["start"]))
-@lang.language()
-async def start(_, message: types.Message):
-    if message.from_user.id in app.bl_users and message.from_user.id not in db.notified:
-        return await message.reply_text(message.lang["bl_user_notify"])
-
-    if len(message.command) > 1 and message.command[1] == "help":
-        return await _help(_, message)
+@dp.message(Command("start"))
+async def start(message: types.Message, lang: dict):
+    command = message.text.split()
+    if len(command) > 1 and command[1] == "help":
+        return await _help(message, lang)
 
     private = message.chat.type == enums.ChatType.PRIVATE
     _text = (
-        message.lang["start_pm"].format(message.from_user.first_name, app.name)
+        lang["start_pm"].format(message.from_user.first_name, app.name)
         if private
-        else message.lang["start_gp"].format(app.name)
+        else lang["start_gp"].format(app.name)
     )
 
-    key = buttons.start_key(message.lang, private)
-    await message.reply_photo(
-        photo=config.START_IMG,
-        caption=_text,
+    key = buttons.start_key(lang, private, message.from_user.id)
+    await message.reply(
+        text=_text,
         reply_markup=key,
-        quote=not private,
     )
 
     if private:
@@ -49,37 +43,57 @@ async def start(_, message: types.Message):
         await utils.send_log(message)
         await db.add_user(message.from_user.id)
     else:
-        if await db.is_chat(message.chat.id):
-            return
-        await utils.send_log(message, True)
-        await db.add_chat(message.chat.id)
+        if not await db.is_chat(message.chat.id):
+            await utils.send_log(message, True)
+            await db.add_chat(message.chat.id, message.from_user.id)
 
 
-@app.on_message(filters.command(["playmode", "settings"]) & filters.group & ~app.bl_users)
-@lang.language()
-async def settings(_, message: types.Message):
+@dp.message(Command("playmode", "settings"), F.chat.type.in_([enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]))
+async def settings(message: types.Message, lang: dict):
     admin_only = await db.get_play_mode(message.chat.id)
     cmd_delete = await db.get_cmd_delete(message.chat.id)
     _language = await db.get_lang(message.chat.id)
-    await message.reply_text(
-        text=message.lang["start_settings"].format(message.chat.title),
+    await message.reply(
+        text=lang["start_settings"].format(message.chat.title),
         reply_markup=buttons.settings_markup(
-            message.lang, admin_only, cmd_delete, _language, message.chat.id
+            lang, admin_only, cmd_delete, _language, message.chat.id
         ),
-        quote=True,
     )
 
+@dp.my_chat_member()
+async def _bot_member_update(update: types.ChatMemberUpdated, lang: dict):
+    if update.new_chat_member.status == enums.ChatMemberStatus.ADMINISTRATOR:
+        if not await db.is_chat(update.chat.id):
+            user_id = update.from_user.id if update.from_user else None
+            await db.add_chat(update.chat.id, user_id)
+            await update.bot.send_message(
+                update.chat.id,
+                lang["chat_added"].format(update.chat.title)
+            )
 
-@app.on_message(filters.new_chat_members, group=7)
-@lang.language()
-async def _new_member(_, message: types.Message):
-    if message.chat.type != enums.ChatType.SUPERGROUP:
-        return await message.chat.leave()
+        # Assistant join logic
+        try:
+            client = await db.get_assistant(update.chat.id)
+            if client:
+                try:
+                    await client.get_chat_member(update.chat.id, client.id)
+                except Exception:
+                    chat = await update.bot.get_chat(update.chat.id)
+                    if chat.username:
+                        invite_link = chat.username
+                    else:
+                        invite_link = chat.invite_link or await update.bot.export_chat_invite_link(update.chat.id)
+                    await client.join_chat(invite_link)
+        except Exception:
+            pass
 
+@dp.message(F.new_chat_members)
+async def _new_member(message: types.Message, lang: dict):
     await asyncio.sleep(3)
     for member in message.new_chat_members:
         if member.id == app.id:
-            if await db.is_chat(message.chat.id):
-                return
-            await utils.send_log(message, True)
-            await db.add_chat(message.chat.id)
+            if not await db.is_chat(message.chat.id):
+                user_id = message.from_user.id if message.from_user else None
+                await utils.send_log(message, True)
+                await db.add_chat(message.chat.id, user_id)
+            await message.reply(lang["promote_me"])

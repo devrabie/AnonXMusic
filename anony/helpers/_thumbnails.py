@@ -9,7 +9,7 @@ from PIL import (Image, ImageDraw, ImageEnhance,
                  ImageFilter, ImageFont, ImageOps)
 
 from anony import config
-from anony.helpers import Track
+from ._dataclass import Track
 
 
 class Thumbnail:
@@ -73,4 +73,4 @@ class Thumbnail:
             except Exception: pass
             return output
         except Exception:
-            config.DEFAULT_THUMB
+            return config.DEFAULT_THUMB

@@ -77,10 +77,9 @@ save_env_vars() {
 API_ID=$1
 API_HASH=$2
 BOT_TOKEN=$3
-MONGO_URL=$4
-LOGGER_ID=$5
-SESSION=$6
-OWNER_ID=$7
+LOGGER_ID=$4
+SESSION=$5
+OWNER_ID=$6
 EOF
 }
 
@@ -99,15 +98,15 @@ pprint "\nAnonXMusic Installation Completed.\n" "cgreen"
 sleep 2
 clear
 
+pprint "\nNote: You can skip STRING SESSION and use 'python3 login.py' after setup to login interactively.\n\n" "cyellow"
 pprint "\nEnter Your Values Below\n\n\n" "cmagenta"
 read -rp "API ID: " api_id
 read -rp "API HASH: " api_hash
 read -rp "BOT TOKEN: " bot_token
 read -rp "OWNER ID: " ownid
-read -rp "MONGO URL: " mongo_db
 read -rp "LOG GROUP ID: " logger
 read -rp "STRING SESSION: " string_session
 
-save_env_vars "$api_id" "$api_hash" "$bot_token" "$mongo_db" "$logger" "$string_session" "$ownid"
+save_env_vars "$api_id" "$api_hash" "$bot_token" "$logger" "$string_session" "$ownid"
 
 pprint "\nYour variables have been saved! Start bot with: bash start\n" "cgreen"
