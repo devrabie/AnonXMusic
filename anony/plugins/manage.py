@@ -71,6 +71,7 @@ async def _manage_chat(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
     url, status, stype, source = await db.get_stream(chat_id)
     loop = await db.get_loop(chat_id)
+    notify = await db.get_notify(chat_id)
 
     # Check if currently playing
     is_playing = await db.get_call(chat_id)
@@ -79,7 +80,7 @@ async def _manage_chat(query: types.CallbackQuery, lang: dict):
         is_paused = await db.is_paused(chat_id)
         keyboard = buttons.controls(chat_id, is_paused=is_paused)
     else:
-        keyboard = buttons.stream_markup(lang, chat_id, status, stype, source, loop)
+        keyboard = buttons.stream_markup(lang, chat_id, status, stype, source, loop, notify)
 
     try:
         await query.message.edit_text(
@@ -112,6 +113,13 @@ async def _toggle_loop(query: types.CallbackQuery, lang: dict):
     chat_id = int(query.data.split()[1])
     loop = await db.get_loop(chat_id)
     await db.set_loop(chat_id, not loop)
+    await _manage_chat(query, lang)
+
+@dp.callback_query(F.data.regexp(r"toggle_notify (-?\d+)"))
+async def _toggle_notify(query: types.CallbackQuery, lang: dict):
+    chat_id = int(query.data.split()[1])
+    notify = await db.get_notify(chat_id)
+    await db.set_notify(chat_id, not notify)
     await _manage_chat(query, lang)
 
 @dp.callback_query(F.data.regexp(r"toggle_stream (-?\d+)"))

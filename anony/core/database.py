@@ -87,6 +87,10 @@ class Database:
             await self.conn.execute("ALTER TABLE chats ADD COLUMN loop_status BOOLEAN DEFAULT 0")
         except Exception:
             pass
+        try:
+            await self.conn.execute("ALTER TABLE chats ADD COLUMN stream_notify BOOLEAN DEFAULT 1")
+        except Exception:
+            pass
 
     async def close(self) -> None:
         if self.conn:
@@ -332,6 +336,15 @@ class Database:
         async with self.conn.execute("SELECT stream_url, stream_status, stream_type, stream_source FROM chats WHERE chat_id = ?", (chat_id,)) as cursor:
             row = await cursor.fetchone()
             return row if row else (None, False, "audio", "url")
+
+    async def get_notify(self, chat_id: int) -> bool:
+        async with self.conn.execute("SELECT stream_notify FROM chats WHERE chat_id = ?", (chat_id,)) as cursor:
+            row = await cursor.fetchone()
+            return bool(row[0]) if row and row[0] is not None else True
+
+    async def set_notify(self, chat_id: int, status: bool) -> None:
+        await self.conn.execute("INSERT INTO chats (chat_id, stream_notify) VALUES (?, ?) ON CONFLICT(chat_id) DO UPDATE SET stream_notify = excluded.stream_notify", (chat_id, status))
+        await self.conn.commit()
 
     async def set_stream(self, chat_id: int, url: str = None, status: bool = None, stype: str = None, source: str = None):
         if url is not None:

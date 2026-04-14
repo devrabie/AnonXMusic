@@ -233,7 +233,10 @@ class TgCall(PyTgCalls):
                     except Exception:
                         pass
 
-                # If no message to edit (e.g. not from dashboard), and it's a channel, skip sending new message
+                # Check notification status
+                notify = await db.get_notify(chat_id)
+
+                # If no message to edit (e.g. not from dashboard), and it's a channel or notifications are disabled, skip sending new message
                 is_channel = False
                 if chat_obj:
                     is_channel = chat_obj.type == pyenums.ChatType.CHANNEL
@@ -244,7 +247,7 @@ class TgCall(PyTgCalls):
                     except Exception:
                         pass
 
-                if is_channel:
+                if not notify or is_channel:
                     return
 
                 if _thumb:

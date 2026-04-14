@@ -169,6 +169,7 @@
     "stream_settings": "📡 Stream Settings - {0}",
     "stream_url": "🔗 Stream URL",
     "stream_status": "📊 Stream Status",
+    "stream_notify": "🔔 Notifications",
     "stream_type": "🎞️ Stream Type",
     "stream_source": "📂 Stream Source",
     "loop_status": "🔁 Loop Status",
