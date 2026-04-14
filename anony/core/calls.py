@@ -6,7 +6,8 @@
 import html
 from ntgcalls import (ConnectionNotFound, TelegramServerError,
                       RTMPStreamingUnsupported, ConnectionError)
-from pyrogram import errors, types as pytypes
+from aiogram import enums
+from pyrogram import enums as pyenums, errors, types as pytypes
 from pytgcalls import PyTgCalls, exceptions, types
 from pytgcalls.pytgcalls_session import PyTgCallsSession
 
@@ -71,8 +72,9 @@ class TgCall(PyTgCalls):
                 return
 
         # Resolve peer to avoid PeerIdInvalid
+        chat_obj = None
         try:
-            await ub.get_chat(chat_id)
+            chat_obj = await ub.get_chat(chat_id)
         except Exception:
             try:
                 await ub.resolve_peer(chat_id)
@@ -222,6 +224,20 @@ class TgCall(PyTgCalls):
                         return
                     except Exception:
                         pass
+
+                # If no message to edit (e.g. not from dashboard), and it's a channel, skip sending new message
+                is_channel = False
+                if chat_obj:
+                    is_channel = chat_obj.type == pyenums.ChatType.CHANNEL
+                else:
+                    try:
+                        chat = await app.get_chat(chat_id)
+                        is_channel = chat.type == enums.ChatType.CHANNEL
+                    except Exception:
+                        pass
+
+                if is_channel:
+                    return
 
                 if _thumb:
                     from aiogram.types import FSInputFile, URLInputFile
