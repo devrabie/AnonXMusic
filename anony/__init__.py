@@ -8,6 +8,8 @@ import asyncio
 import logging
 import pyrogram.errors
 from logging.handlers import RotatingFileHandler
+from aiogram import Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 
 # Monkeypatch for compatibility with pytgcalls and different pyrogram versions
 if not hasattr(pyrogram.errors, "GroupcallForbidden"):
@@ -28,6 +30,7 @@ logging.getLogger("httpx").setLevel(logging.ERROR)
 logging.getLogger("ntgcalls").setLevel(logging.CRITICAL)
 logging.getLogger("pyrogram").setLevel(logging.ERROR)
 logging.getLogger("pytgcalls").setLevel(logging.ERROR)
+logging.getLogger("aiogram").setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -42,6 +45,12 @@ boot = time.time()
 
 from anony.core.bot import Bot
 app = Bot()
+dp = Dispatcher(storage=MemoryStorage())
+
+# Register Middleware
+from anony.core.middleware import LanguageMiddleware
+dp.message.middleware(LanguageMiddleware())
+dp.callback_query.middleware(LanguageMiddleware())
 
 from anony.core.dir import ensure_dirs
 ensure_dirs()
@@ -56,9 +65,7 @@ from anony.core.lang import Language
 lang = Language()
 
 from anony.core.telegram import Telegram
-from anony.core.youtube import YouTube
 tg = Telegram()
-yt = YouTube()
 
 from anony.helpers import Queue, Thumbnail
 queue = Queue()
@@ -66,6 +73,9 @@ thumb = Thumbnail()
 
 from anony.core.calls import TgCall
 anon = TgCall()
+
+from anony.core.youtube import YouTube
+yt = YouTube()
 
 
 async def stop() -> None:

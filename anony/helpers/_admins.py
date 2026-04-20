@@ -4,18 +4,17 @@
 
 
 from functools import wraps
-
-from pyrogram import StopPropagation, enums, types
+from aiogram import types, enums
 
 from anony import app, db
 
 
 def admin_check(func):
     @wraps(func)
-    async def wrapper(_, update: types.Message | types.CallbackQuery, *args, **kwargs):
+    async def wrapper(update: types.Message | types.CallbackQuery, *args, **kwargs):
         async def reply(text):
             if isinstance(update, types.Message):
-                return await update.reply_text(text)
+                return await update.reply(text)
             else:
                 return await update.answer(text, show_alert=True)
 
@@ -25,25 +24,31 @@ def admin_check(func):
             else update.message.chat
         )
         if chat.type == enums.ChatType.PRIVATE:
-            return await func(_, update, *args, **kwargs)
+            return await func(update, *args, **kwargs)
 
         user_id = update.from_user.id
         admins = await db.get_admins(chat.id)
 
+        # check if owner or sudo
         if user_id in app.sudoers:
-            return await func(_, update, *args, **kwargs)
+            return await func(update, *args, **kwargs)
 
         if user_id not in admins:
-            return await reply(update.lang["user_no_perms"])
+            if not admins:
+                admins = await reload_admins(chat.id)
+                await db.set_admins(chat.id, admins)
 
-        return await func(_, update, *args, **kwargs)
+            if user_id not in admins:
+                return await reply(update.lang["user_no_perms"])
+
+        return await func(update, *args, **kwargs)
 
     return wrapper
 
 
 def can_manage_vc(func):
     @wraps(func)
-    async def wrapper(_, update: types.Message | types.CallbackQuery, *args, **kwargs):
+    async def wrapper(update: types.Message | types.CallbackQuery, *args, **kwargs):
         chat_id = (
             update.chat.id
             if isinstance(update, types.Message)
@@ -52,17 +57,17 @@ def can_manage_vc(func):
         user_id = update.from_user.id
 
         if user_id in app.sudoers:
-            return await func(_, update, *args, **kwargs)
+            return await func(update, *args, **kwargs)
 
         if await db.is_auth(chat_id, user_id):
-            return await func(_, update, *args, **kwargs)
+            return await func(update, *args, **kwargs)
 
         admins = await db.get_admins(chat_id)
         if user_id in admins:
-            return await func(_, update, *args, **kwargs)
+            return await func(update, *args, **kwargs)
 
         if isinstance(update, types.Message):
-            return await update.reply_text(update.lang["user_no_perms"])
+            return await update.reply(update.lang["user_no_perms"])
         else:
             return await update.answer(update.lang["user_no_perms"], show_alert=True)
 
@@ -70,27 +75,23 @@ def can_manage_vc(func):
 
 
 async def is_admin(chat_id: int, user_id: int) -> bool:
+    if user_id in app.sudoers:
+        return True
     if user_id in await db.get_admins(chat_id):
         return True
     try:
         member = await app.get_chat_member(chat_id, user_id)
         return member.status in [
             enums.ChatMemberStatus.ADMINISTRATOR,
-            enums.ChatMemberStatus.OWNER,
+            enums.ChatMemberStatus.CREATOR,
         ]
     except Exception:
-        raise StopPropagation
+        return False
 
 
 async def reload_admins(chat_id: int) -> list[int]:
     try:
-        admins = [
-            admin
-            async for admin in app.get_chat_members(
-                chat_id, filter=enums.ChatMembersFilter.ADMINISTRATORS
-            )
-            if not admin.user.is_bot
-        ]
-        return [admin.user.id for admin in admins]
+        admins = await app.get_chat_administrators(chat_id)
+        return [admin.user.id for admin in admins if not admin.user.is_bot]
     except Exception:
         return []

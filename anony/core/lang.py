@@ -6,8 +6,8 @@
 import json
 from functools import wraps
 from pathlib import Path
-
-from pyrogram import errors
+from aiogram import types
+from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 
 from anony import db, logger
 
@@ -58,43 +58,46 @@ class Language:
     def language(self):
         def decorator(func):
             @wraps(func)
-            async def wrapper(*args, **kwargs):
-                fallen = next(
-                    (
-                        arg
-                        for arg in args
-                        if hasattr(arg, "chat") or hasattr(arg, "message")
-                    ),
-                    None,
-                )
+            async def wrapper(event, *args, **kwargs):
+                if isinstance(event, types.Message):
+                    user = event.from_user
+                    chat = event.chat
+                elif isinstance(event, types.CallbackQuery):
+                    user = event.from_user
+                    chat = event.message.chat if event.message else None
+                else:
+                    return await func(event, *args, **kwargs)
 
-                if not fallen.from_user:
-                    return
-
-                if hasattr(fallen, "chat"):
-                    chat = fallen.chat
-                elif hasattr(fallen, "message"):
-                    chat = fallen.message.chat
-
-                if not chat: return
+                if not user or not chat:
+                    return await func(event, *args, **kwargs)
 
                 if chat.id in db.blacklisted:
                     logger.info(f"Chat {chat.id} is blacklisted, leaving...")
-                    return await chat.leave()
+                    try:
+                        await event.bot.leave_chat(chat.id)
+                    except:
+                        pass
+                    return
 
                 lang_code = await db.get_lang(chat.id)
                 lang_dict = self.languages[lang_code]
 
-                setattr(fallen, "lang", lang_dict)
+                # In aiogram, we can't easily set attributes on types, so we pass it in kwargs or context
+                # But for simplicity in this migration, we might try to set it if possible or pass it explicitly.
+                # Actually, many plugins use event.lang.
                 try:
-                    return await func(*args, **kwargs)
-                except (errors.ChannelPrivate, errors.MessageIdInvalid, errors.MessageNotModified):
+                    setattr(event, "lang", lang_dict)
+                except AttributeError:
+                    # Some types might not allow setting attributes
+                    pass
+
+                try:
+                    return await func(event, *args, **kwargs)
+                except (TelegramForbiddenError, TelegramBadRequest):
                     return
-                except (
-                    errors.Forbidden, errors.exceptions.Forbidden,
-                    errors.ChatWriteForbidden, errors.exceptions.ChatWriteForbidden,
-                ):
-                    return
+                except Exception as e:
+                    logger.error(f"Error in handler {func.__name__}: {e}")
+                    raise e
 
             return wrapper
 
