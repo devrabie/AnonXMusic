@@ -49,7 +49,7 @@ async def _add_ass_prompt(query: types.CallbackQuery, state: FSMContext, lang: d
     await state.set_state(AdminState.entering_session)
     await query.message.edit_text(
         lang["enter_session"],
-        reply_markup=buttons.cancel_markup(lang)
+        reply_markup=buttons.cancel_markup(lang, "manage_ass")
     )
     await query.answer()
 

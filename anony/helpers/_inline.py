@@ -145,9 +145,9 @@ class Inline:
         builder.row(types.InlineKeyboardButton(text=_lang["main_menu"], callback_data="start_back"))
         return builder.as_markup()
 
-    def cancel_markup(self, _lang: dict) -> types.InlineKeyboardMarkup:
+    def cancel_markup(self, _lang: dict, callback_data: str = "start_back") -> types.InlineKeyboardMarkup:
         builder = InlineKeyboardBuilder()
-        builder.button(text=_lang["cancel"], callback_data="start_back")
+        builder.button(text=_lang["cancel"], callback_data=callback_data)
         return builder.as_markup()
 
     def play_chat_markup(self, _lang: dict, chats: list, command: str) -> types.InlineKeyboardMarkup:
@@ -169,8 +169,21 @@ class Inline:
         )
         builder.button(text=_lang["set_url"], callback_data=f"set_url {chat_id}")
         builder.button(text=_lang["add_local_media"], callback_data=f"add_local {chat_id}")
+        builder.button(text=_lang["playlist_management"], callback_data=f"manage_playlist {chat_id}")
         builder.button(text=_lang["back"], callback_data="manage_chats")
-        builder.adjust(1, 2, 1, 2, 1)
+        builder.adjust(1, 2, 1, 2, 1, 1)
+        return builder.as_markup()
+
+    def playlist_markup(self, _lang: dict, chat_id: int, queue_list: list) -> types.InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        for i, item in enumerate(queue_list):
+            builder.button(text=f"{i+1}. {item.title[:20]}", callback_data=f"play_item {chat_id} {i}")
+            builder.button(text="📝", callback_data=f"rename_item {chat_id} {i}")
+            builder.button(text="🗑️", callback_data=f"del_item {chat_id} {i}")
+
+        builder.adjust(3)
+        builder.row(types.InlineKeyboardButton(text=_lang["clear_queue"], callback_data=f"clear_queue {chat_id}"))
+        builder.row(types.InlineKeyboardButton(text=_lang["back"], callback_data=f"manage_chat {chat_id}"))
         return builder.as_markup()
 
     def start_key(

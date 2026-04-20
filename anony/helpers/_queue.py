@@ -17,6 +17,11 @@ class Queue:
 
     def add(self, chat_id: int, item: MediaItem) -> int:
         """Add an item to the queue and return its position (1-based)."""
+        # Avoid duplicates by id
+        for existing in self.queues[chat_id]:
+            if existing.id == item.id:
+                return -2 # Custom code for duplicate
+
         self.queues[chat_id].append(item)
         return len(self.queues[chat_id]) - 1
 
