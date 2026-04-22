@@ -15,6 +15,7 @@ MediaItem = Union[Media, Track]
 class Queue:
     def __init__(self):
         self.queues: dict[int, deque[MediaItem]] = defaultdict(deque)
+        self._played: dict[int, int] = defaultdict(int)
 
     async def _save(self, chat_id: int):
         from anony import db
@@ -60,20 +61,28 @@ class Queue:
         return self.queues[chat_id][0] if self.queues[chat_id] else None
 
     async def get_next(self, chat_id: int, check: bool = False) -> MediaItem | None:
-        """Remove current item and return the next one, or None if empty."""
+        """Rotate to the next item and return it, or None if the playlist cycle is complete and loop is off."""
         if not self.queues[chat_id]:
             return None
         if check:
             return self.queues[chat_id][1] if len(self.queues[chat_id]) > 1 else None
 
         from anony import db
-        if await db.get_loop(chat_id):
-            self.queues[chat_id].rotate(-1)
-        else:
-            self.queues[chat_id].popleft()
+        loop = await db.get_loop(chat_id)
 
+        # Always rotate to keep the playlist permanent
+        self.queues[chat_id].rotate(-1)
         await self._save(chat_id)
-        return self.queues[chat_id][0] if self.queues[chat_id] else None
+
+        if loop:
+            return self.queues[chat_id][0]
+        else:
+            # If loop is off, track played items to stop after one full cycle
+            self._played[chat_id] += 1
+            if self._played[chat_id] >= len(self.queues[chat_id]):
+                self._played[chat_id] = 0
+                return None
+            return self.queues[chat_id][0]
 
     async def get_prev(self, chat_id: int) -> MediaItem | None:
         """Rotate the queue backward and return the 'new' current item."""

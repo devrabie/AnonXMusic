@@ -6,7 +6,8 @@
 import html
 from ntgcalls import (ConnectionNotFound, TelegramServerError,
                       RTMPStreamingUnsupported, ConnectionError)
-from pyrogram import errors, types as pytypes
+from aiogram import enums
+from pyrogram import enums as pyenums, errors, types as pytypes
 from pytgcalls import PyTgCalls, exceptions, types
 from pytgcalls.pytgcalls_session import PyTgCallsSession
 
@@ -32,9 +33,11 @@ class TgCall(PyTgCalls):
     async def stop(self, chat_id: int) -> None:
         from anony import queue
         client = await db.get_assistant(chat_id)
-        await queue.clear(chat_id)
+        # We don't clear the queue anymore as per user request for permanent playlists
+        # await queue.clear(chat_id)
         await db.remove_call(chat_id)
         await db.set_loop(chat_id, False)
+        queue._played[chat_id] = 0
 
         try:
             await client.leave_call(chat_id, close=False)
@@ -69,8 +72,9 @@ class TgCall(PyTgCalls):
                 return
 
         # Resolve peer to avoid PeerIdInvalid
+        chat_obj = None
         try:
-            await ub.get_chat(chat_id)
+            chat_obj = await ub.get_chat(chat_id)
         except Exception:
             try:
                 await ub.resolve_peer(chat_id)
@@ -165,11 +169,29 @@ class TgCall(PyTgCalls):
                 ffmpeg_parameters=f"-ss {seek_time}" if seek_time > 1 else None,
             )
         try:
-            await client.play(
-                chat_id=chat_id,
-                stream=stream,
-                config=types.GroupCallConfig(auto_start=True),
-            )
+            try:
+                await client.play(
+                    chat_id=chat_id,
+                    stream=stream,
+                    config=types.GroupCallConfig(auto_start=True),
+                )
+            except exceptions.NoVideoSourceFound:
+                # Fallback to audio only
+                # Re-create the stream without video to avoid AttributeError
+                stream = types.MediaStream(
+                    media_path=stream_url if stream_url else media.file_path,
+                    audio_parameters=types.AudioQuality.HIGH,
+                    video_parameters=types.VideoQuality.HD_720p,
+                    audio_flags=types.MediaStream.Flags.REQUIRED,
+                    video_flags=types.MediaStream.Flags.IGNORE,
+                    ffmpeg_parameters=f"-ss {seek_time}" if seek_time > 1 else None,
+                )
+                await client.play(
+                    chat_id=chat_id,
+                    stream=stream,
+                    config=types.GroupCallConfig(auto_start=True),
+                )
+
             if not seek_time:
                 media.time = 1
                 await db.add_call(chat_id)
@@ -202,6 +224,20 @@ class TgCall(PyTgCalls):
                         return
                     except Exception:
                         pass
+
+                # If no message to edit (e.g. not from dashboard), and it's a channel, skip sending new message
+                is_channel = False
+                if chat_obj:
+                    is_channel = chat_obj.type == pyenums.ChatType.CHANNEL
+                else:
+                    try:
+                        chat = await app.get_chat(chat_id)
+                        is_channel = chat.type == enums.ChatType.CHANNEL
+                    except Exception:
+                        pass
+
+                if is_channel:
+                    return
 
                 if _thumb:
                     from aiogram.types import FSInputFile, URLInputFile

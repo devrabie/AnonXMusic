@@ -1,0 +1,11 @@
+services:
+  anony:
+    build: .
+    container_name: anony-bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./anony.db:/app/anony.db
+      - ./downloads:/app/downloads
+      - ./cache:/app/cache

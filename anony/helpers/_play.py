@@ -26,7 +26,7 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
                 break
 
     media = None
-    if m.reply_to_message and (m.reply_to_message.audio or m.reply_to_message.video or m.reply_to_message.document):
+    if m.reply_to_message and (m.reply_to_message.audio or m.reply_to_message.video or m.reply_to_message.document or m.reply_to_message.voice or m.reply_to_message.video_note):
         sent = await m.reply(lang["play_downloading"])
         # Bridge aiogram and pyrogram for download via assistant
         from anony import userbot
@@ -35,15 +35,27 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
              return await sent.edit_text(lang["play_no_assistant"])
 
         try:
-            # We need the pyrogram message object. We can try to get it by ID
-            # But the assistant might not be in the chat where the reply is.
-            # Usually, for replies, we assume it's in the same chat.
-            try:
-                p_msg = await client.get_messages(m.chat.id, m.reply_to_message.message_id)
-            except Exception:
-                fwd = await m.reply_to_message.forward(client.id)
-                p_msg = await client.get_messages(client.id, fwd.message_id)
-            media = await tg.download(p_msg, sent, lang)
+            # Try Bot-based download first
+            media = await tg.download(m.reply_to_message, sent, lang)
+            if not media:
+                # Fallback to assistant
+                try:
+                    # Clear events before retrying with assistant
+                    msg_id = sent.message_id if hasattr(sent, "message_id") else sent.id
+                    tg.events.pop(msg_id, None)
+                    tg.last_edit.pop(msg_id, None)
+
+                    fwd = await m.reply_to_message.forward(client.id)
+                    # Use app.id to retrieve from forward if assistant PM
+                    p_msg = await client.get_messages(client.id, fwd.message_id)
+                    if not p_msg or p_msg.empty:
+                         # Try retrieving from app.id
+                         p_msg = await client.get_messages(app.id, fwd.message_id)
+
+                    media = await tg.download(p_msg, sent, lang)
+                except Exception as e:
+                    logger.error(f"Assistant fallback failed: {e}")
+                    return await sent.edit_text(f"Error: {e}")
         except Exception as e:
             return await sent.edit_text(f"Error: {e}")
     elif url:
@@ -81,9 +93,14 @@ async def process_play(m: types.Message, lang: dict, chat_id: int, command: str,
     if position == 0 and not await db.get_call(chat_id):
         if not await join_assistant(chat_id, lang, m):
             return
+        queue._played[chat_id] = 0
         await anon.play_media(chat_id, m if m.chat.id == chat_id else None, media)
         if m.chat.id != chat_id:
-             await m.reply(lang["play_started"].format(html.escape(media.title), chat_id))
+             is_paused = await db.is_paused(chat_id)
+             await m.reply(
+                 lang["play_started"].format(html.escape(media.title), chat_id),
+                 reply_markup=buttons.controls(chat_id, is_paused=is_paused)
+             )
     else:
         await m.reply(
             lang["play_queued"].format(

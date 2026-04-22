@@ -10,7 +10,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from anony import app, dp, db, lang, anon, tg, queue, config
+from anony import app, dp, db, lang, anon, tg, queue, config, logger
 from anony.helpers import buttons, join_assistant, utils
 
 class ManageChat(StatesGroup):
@@ -341,21 +341,34 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
         if m.text:
             link = m.text.strip()
             media = await tg.get_from_link(link, sent, lang)
-        elif m.audio or m.video or m.document:
+        elif m.audio or m.video or m.document or m.voice or m.video_note:
             # Bridge aiogram and pyrogram for download via assistant
             from anony import userbot
             client = userbot.clients[0] if userbot.clients else None
             if not client:
                  return await sent.edit_text(lang["play_no_assistant"])
 
-            # Forward to assistant's PM to resolve PEER_ID_INVALID in private chat
-            try:
-                p_msg = await client.get_messages(m.chat.id, m.message_id)
-            except Exception:
-                fwd = await m.forward(client.id)
-                p_msg = await client.get_messages(client.id, fwd.message_id)
+            # Try Bot-based download first (works for all sizes with Local API)
+            media = await tg.download(m, sent, lang)
+            if not media:
+                # Fallback to assistant for large files if Bot failed (likely standard API limit)
+                # Forward to assistant's PM to resolve PEER_ID_INVALID in private chat
+                try:
+                    # Clear events before retrying with assistant
+                    msg_id = sent.message_id if hasattr(sent, "message_id") else sent.id
+                    tg.events.pop(msg_id, None)
+                    tg.last_edit.pop(msg_id, None)
 
-            media = await tg.download(p_msg, sent, lang)
+                    # Use a specific way to get the message for the assistant
+                    fwd = await m.forward(client.id)
+                    p_msg = await client.get_messages(client.id, fwd.message_id)
+                    if not p_msg or p_msg.empty:
+                         p_msg = await client.get_messages(app.id, fwd.message_id)
+
+                    media = await tg.download(p_msg, sent, lang)
+                except Exception as e:
+                    logger.error(f"Failed to forward/get message for assistant: {e}")
+                    return await sent.edit_text(f"Error: {e}")
         else:
             return await sent.edit_text(lang["invalid_telegram_link"])
 
@@ -373,8 +386,13 @@ async def _process_tg_link(m: types.Message, state: FSMContext, lang: dict):
         if status and position == 0 and not await db.get_call(chat_id):
             if not await join_assistant(chat_id, lang, m):
                 return
+            queue._played[chat_id] = 0
             await anon.play_media(chat_id, None, media)
-            await m.reply(lang["play_started"].format(html.escape(media.title), chat_id))
+            is_paused = await db.is_paused(chat_id)
+            await m.reply(
+                lang["play_started"].format(html.escape(media.title), chat_id),
+                reply_markup=buttons.controls(chat_id, is_paused=is_paused)
+            )
         else:
             await m.reply(
             text=lang["play_queued"].format(
